@@ -1,4 +1,4 @@
-// App.js Engine Validasi & Autocomplete Digital SPKRT 2027
+// App.js Engine Validasi & Autocomplete Digital SPKRT 2027 (Buku 5 Lengkap 40.998 Item)
 
 let blRows = [];
 let lkRows = [];
@@ -6,7 +6,7 @@ let validationLogs = [];
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rp = n => 'Rp ' + (Math.round(n) || 0).toLocaleString('id-ID');
-const STORE_KEY = 'spkrt2027-v2';
+const STORE_KEY = 'spkrt2027-v3';
 const FORM_IDS = ['p_nks','p_krt','p_art_total','p_art_bekerja','p_arte_13','p_rencana_pindah','s_pendidikan','s_art_sekolah','s_status_rumah','s_nilai_sewa'];
 let loading = true;
 
@@ -40,12 +40,12 @@ function loadDemo() {
     set('p_nks','0012B'); set('p_krt','Contoh KRT'); set('p_art_total',4); set('p_art_bekerja',2); set('p_arte_13',3);
     set('s_pendidikan',1500000); set('s_art_sekolah',1); set('s_nilai_sewa',800000);
     blRows = [
-        { kode:"2202010101", nama:"Tarif Listrik PLN", metode:"KAS", pasar:"5", cash:250000, dp:0 },
-        { kode:"2801010101", nama:"Pembelian Mesin Cuci / Kulkas (Kredit/Tunai)", metode:"KREDIT", pasar:"5", cash:3600000, dp:1000000 }
+        { kode:"0341001001", nama:"LISTRIK - PASCA BAYAR", metode:"KAS", pasar:"5", cash:250000, dp:0 },
+        { kode:"0431004001", nama:"MESIN CUCI", metode:"KREDIT", pasar:"5", cash:3600000, dp:1000000 }
     ];
     lkRows = [
-        { kode:"1101010101", nama:"Beras Medium", totalHarian:3.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:49000 },
-        { kode:"1102020101", nama:"Daging Ayam Ras", totalHarian:1.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:57000 }
+        { kode:"0111001057", nama:"BERAS - BULOG MEDIUM", totalHarian:3.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:49000 },
+        { kode:"0112004001", nama:"DAGING AYAM RAS", totalHarian:1.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:57000 }
     ];
     runValidationP(); runValidationS(); renderBL(); renderLK();
 }
@@ -91,7 +91,7 @@ function runValidationP() {
     }
     const dataWarn = [];
     if (artBekerja > artTotal) dataWarn.push("Jumlah ART bekerja melebihi jumlah ART total.");
-    if (arte13 > artTotal) dataWarn.push("Jumlah ARTE ≥ 13 tahun melebihi jumlah ART total.");
+    if (arte13 > artTotal) dataWarn.push("Jumlah ARTE >= 13 tahun melebihi jumlah ART total.");
 
     if (artTotal < 2 || artTotal > 10) {
         isEligible = false;
@@ -125,20 +125,47 @@ function runValidationP() {
 }
 
 // -------------------------------------------------------------
-// AUTOCOMPLETE ENGINE MASTER BUKU 5
+// AUTOCOMPLETE ENGINE MASTER BUKU 5 (OPTIMASI 40.998 ITEM)
 // -------------------------------------------------------------
 let activeInputTarget = null;
 let activeRowIndex = null;
 let activeTargetType = null;
+
+function searchMaster(query, limit = 15) {
+    const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return [];
+    const results = [];
+    for (let i = 0; i < MASTER_KOMODITAS.length; i++) {
+        const item = MASTER_KOMODITAS[i];
+        let match = true;
+        for (let t = 0; t < tokens.length; t++) {
+            if (!item._search.includes(tokens[t])) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            results.push(item);
+            if (results.length >= limit) break;
+        }
+    }
+    return results;
+}
 
 function showCommoditySearch(event, inputElem, type, rowIndex) {
     activeInputTarget = inputElem;
     activeRowIndex = rowIndex;
     activeTargetType = type;
     const row = (type === 'BL' ? blRows : lkRows)[rowIndex];
-    if (row) { row.nama = inputElem.value; row.kode = ''; const k = inputElem.closest('tr').querySelector('.c-kode'); if (k) k.value = ''; saveState(); }
+    if (row) {
+        row.nama = inputElem.value;
+        row.kode = '';
+        const k = inputElem.closest('tr').querySelector('.c-kode');
+        if (k) k.value = '';
+        saveState();
+    }
 
-    const query = inputElem.value.toLowerCase().trim();
+    const query = inputElem.value.trim();
     const dropdown = document.getElementById('autocompleteDropdown');
 
     if (query.length === 0) {
@@ -146,11 +173,7 @@ function showCommoditySearch(event, inputElem, type, rowIndex) {
         return;
     }
 
-    const filtered = MASTER_KOMODITAS.filter(item => 
-        item.nama.toLowerCase().includes(query) ||
-        item.kode.includes(query) ||
-        item.kualitas.toLowerCase().includes(query)
-    ).slice(0, 8);
+    const filtered = searchMaster(query, 15);
 
     if (filtered.length === 0) {
         dropdown.style.display = 'none';
@@ -160,12 +183,12 @@ function showCommoditySearch(event, inputElem, type, rowIndex) {
     const rect = inputElem.getBoundingClientRect();
     dropdown.style.top = `${rect.bottom + window.scrollY}px`;
     dropdown.style.left = `${rect.left + window.scrollX}px`;
-    dropdown.style.width = `${Math.max(rect.width, 320)}px`;
+    dropdown.style.width = `${Math.max(rect.width, 360)}px`;
     dropdown.style.display = 'block';
 
     dropdown.innerHTML = filtered.map(item => `
-        <div class="autocomplete-item" onclick="selectCommodity('${item.kode}')">
-            <div class="autocomplete-title">${esc(item.nama)}</div>
+        <div class="autocomplete-item" onclick="selectCommodityById(${item.id})">
+            <div class="autocomplete-title">${esc(item.nama)} <span style="font-weight:400;color:#475569;">(${esc(item.kualitas)})</span></div>
             <div class="autocomplete-sub">
                 <span>Kode: ${item.kode} | Satuan: ${esc(item.satuan)}</span>
                 <span class="badge badge-info">${item.kuesioner}</span>
@@ -174,17 +197,20 @@ function showCommoditySearch(event, inputElem, type, rowIndex) {
     `).join('');
 }
 
-function selectCommodity(kode) {
-    const item = MASTER_KOMODITAS.find(k => k.kode === kode);
+function selectCommodityById(id) {
+    const item = MASTER_KOMODITAS[id];
     if (!item) return;
+    const labelLengkap = item.kualitas && item.kualitas !== 'GABUNGAN' && item.kualitas !== '…'
+        ? `${item.nama} - ${item.kualitas}`
+        : item.nama;
 
     if (activeTargetType === 'BL') {
         blRows[activeRowIndex].kode = item.kode;
-        blRows[activeRowIndex].nama = item.nama;
+        blRows[activeRowIndex].nama = labelLengkap;
         renderBL();
     } else if (activeTargetType === 'LK') {
         lkRows[activeRowIndex].kode = item.kode;
-        lkRows[activeRowIndex].nama = item.nama;
+        lkRows[activeRowIndex].nama = labelLengkap;
         lkRows[activeRowIndex].satuan = item.satuan;
         renderLK();
     }
@@ -266,7 +292,7 @@ function calcLK(row) {
     const nilai = parseFloat(row.nilai) || 0;
     const harga = stdQty > 0 ? Math.round(nilai / stdQty) : 0;
     const artTotal = parseInt(document.getElementById('p_art_total').value) || 0;
-    const range = MASTER_RANGE_HARGA.range[row.kode];
+    const range = MASTER_RANGE_HARGA.range[row.kode] || (row.kode ? MASTER_RANGE_HARGA.range[row.kode.slice(0, 7)] : null);
     const master = MASTER_KOMODITAS.find(k => k.kode === row.kode);
     const issues = [];
     if (range && stdQty > 0) {
@@ -390,7 +416,7 @@ function updateValidationDashboard() {
 }
 
 // -------------------------------------------------------------
-// TAB 7: MASTER BUKU 5 CATALOG FILTER
+// TAB 7: MASTER BUKU 5 CATALOG FILTER (PAGINASI 100 BARIS)
 // -------------------------------------------------------------
 function renderCatalog() {
     filterCatalog();
@@ -398,21 +424,34 @@ function renderCatalog() {
 
 function filterCatalog() {
     const q = (document.getElementById('catalogSearchInput').value || "").toLowerCase().trim();
+    const tokens = q.split(/\s+/).filter(Boolean);
     const tbody = document.getElementById('tbodyCatalog');
 
-    const filtered = MASTER_KOMODITAS.filter(item => 
-        item.nama.toLowerCase().includes(q) ||
-        item.kode.includes(q) ||
-        item.kualitas.toLowerCase().includes(q)
-    );
+    const matched = [];
+    for (let i = 0; i < MASTER_KOMODITAS.length; i++) {
+        const item = MASTER_KOMODITAS[i];
+        let ok = true;
+        for (let t = 0; t < tokens.length; t++) {
+            if (!item._search.includes(tokens[t])) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok) matched.push(item);
+    }
 
-    tbody.innerHTML = filtered.map(item => `
+    const preview = matched.slice(0, 100);
+    const infoRow = matched.length > 100
+        ? `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Menampilkan <strong>100</strong> dari <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas yang cocok. Ketik kata kunci lebih spesifik (misal: <code>beras pandan</code> atau <code>0111001</code>) untuk menyaring hasil.</td></tr>`
+        : `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Total ditemukan: <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas/kualitas.</td></tr>`;
+
+    tbody.innerHTML = infoRow + preview.map(item => `
         <tr>
             <td><code>${item.kode}</code></td>
             <td><strong>${esc(item.nama)}</strong></td>
             <td>${esc(item.kualitas)}</td>
-            <td><span class="badge badge-bps">${item.satuan}</span></td>
-            <td>${item.batas_max_perkapita} ${item.satuan}</td>
+            <td><span class="badge badge-bps">${esc(item.satuan)}</span></td>
+            <td>${item.batas_max_perkapita} ${esc(item.satuan)}</td>
             <td><span class="badge badge-info">${item.kuesioner}</span></td>
         </tr>
     `).join('');

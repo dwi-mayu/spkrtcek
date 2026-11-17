@@ -2,22 +2,12 @@
 
 Aplikasi Web-Entry Form Kuesioner Digital & Engine Validasi Otomatis untuk Survei Pola Konsumsi Rumah Tangga 2027 (SPKRT 2027) Badan Pusat Statistik.
 
-## Fitur Utama:
-- **Typeable Master Buku 5 Search**: Kolom input pencarian komoditas ketik dengan rekomendasi otomatis (autocomplete).
-- **Validasi Eligibilitas Sampel (VPKRT27-P)**.
-- **Form Kuesioner VPKRT27-BL, VPKRT27-HR, VPKRT27-LK/KK, dan VPKRT27-S**.
-- **Otomasi Konversi Satuan & Pemeriksaan Outlier Harga (Buku 4)**.
-- **Dashboard Log Error & Temuan PML**.
+## Pembaruan Data Master Buku 5:
+- Memuat **seluruh 40.998 komoditas & varian kualitas** (3.213 jenis komoditas) dari *Buku 5 Master Komoditas Kualitas SPKRT 2027 (Revisi Innas 16102026)*.
+- Mendukung pencarian multi-kata kunci secara instan (misal: `beras bulog`, `listrik pasca`, atau kode 10-digit).
+- Katalog Buku 5 dilengkapi pembatasan tampilan 100 baris teratas per pencarian agar browser tetap ringan dan responsif.
 
-## Cara Deploy ke GitHub Pages:
-1. Ekstrak paket berkas zip ini ke dalam folder komputer.
-2. Buat repository public baru di GitHub dengan nama `kalkulator-spkrt2027`.
-3. Unggah seluruh 6 berkas (`index.html`, `style.css`, `master_komoditas.js`, `master_range_harga.js`, `app.js`, `README.md`).
-4. Masuk ke **Settings** -> **Pages** -> Pilih Branch **`main`** -> Klik **Save**.
-
-## Catatan Penggunaan
-- Isian **tersimpan otomatis di browser** (localStorage) perangkat yang dipakai dan tidak dikirim ke server. Gunakan tombol **Hapus Semua Isian** bila memakai perangkat bersama.
-- Tombol **Isi Contoh** memuat data contoh untuk mencoba fitur validasi.
-- Cek outlier memakai `master_range_harga.js`; cek batas per kapita memakai `batas_max_perkapita` di `master_komoditas.js` (dibandingkan dengan konsumsi per kapita dalam satu minggu).
-- Tab **VPKRT27-HR** saat ini berupa contoh format, belum form isian.
-- Setelah deploy, aplikasi dapat dibuka di `https://<username>.github.io/<nama-repo>/`.
+## Cara Deploy ke GitHub Pages / Vercel:
+1. Ekstrak seluruh isi arsip ZIP ini ke dalam satu folder.
+2. Buat repository baru di GitHub (misalnya `kalkulator-spkrt2027`) dan unggah seluruh 6 berkas (`index.html`, `style.css`, `master_komoditas.js`, `master_range_harga.js`, `app.js`, `README.md`).
+3. Masuk ke **Settings** -> **Pages** -> Pilih Branch **`main`** -> Klik **Save**.
