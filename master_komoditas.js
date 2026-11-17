@@ -8,5 +8,5 @@ const MASTER_KOMODITAS = RAW_KOMODITAS.map((r, idx) => ({
   satuan: r[3],
   batas_max_perkapita: r[4],
   kuesioner: r[5],
-  _search: (r[0] + " " + r[1] + " " + r[2]).toLowerCase()
+  _search: (r[0] + " " + r[1] + " " + r[2] + (r[0].startsWith("0342001") || r[0].startsWith("0342003") ? " gas alam jargas gas kota" : "")).toLowerCase()
 }));

@@ -1,20 +1,52 @@
-// App.js Engine Validasi & Autocomplete Digital SPKRT 2027 (Buku 5 Lengkap 40.998 Item)
+// App.js Engine Validasi & Autocomplete Digital SPKRT 2027 (Full Interaktif + Multi-Wilayah + Buku 5 Lengkap)
 
 let blRows = [];
+let hrRows = [];
 let lkRows = [];
 let validationLogs = [];
+let hrDayFilter = 'ALL';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rp = n => 'Rp ' + (Math.round(n) || 0).toLocaleString('id-ID');
-const STORE_KEY = 'spkrt2027-v3';
-const FORM_IDS = ['p_nks','p_krt','p_art_total','p_art_bekerja','p_arte_13','p_rencana_pindah','s_pendidikan','s_art_sekolah','s_status_rumah','s_nilai_sewa'];
+const STORE_KEY = 'spkrt2027-full-v4';
+const FORM_IDS = [
+    'selectWilayah', 'p_nks', 'p_krt', 'p_art_total', 'p_art_bekerja', 'p_arte_13', 'p_rencana_pindah',
+    's_pendidikan', 's_art_sekolah', 's_status_rumah', 's_nilai_sewa', 's_kesehatan_thn', 's_pajak_thn'
+];
 let loading = true;
+
+function getWilayahObj() {
+    const kode = document.getElementById('selectWilayah')?.value || '6571';
+    return MASTER_WILAYAH_HARGA[kode] || MASTER_WILAYAH_HARGA['0000'];
+}
+
+function getRangeHarga(kode) {
+    if (!kode) return null;
+    const w = getWilayahObj();
+    const nat = MASTER_WILAYAH_HARGA['0000'].range;
+    return w.range[kode] || w.range[kode.slice(0, 7)] || nat[kode] || nat[kode.slice(0, 7)] || null;
+}
+
+function onWilayahChange() {
+    const w = getWilayahObj();
+    const noteEl = document.getElementById('wilayahNote');
+    if (noteEl) {
+        noteEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> <strong>${esc(w.nama)}:</strong> ${esc(w.catatan)}`;
+    }
+    renderBL();
+    renderLK();
+    saveState();
+}
 
 function saveState() {
     if (loading) return;
     try {
-        const form = {}; FORM_IDS.forEach(id => form[id] = document.getElementById(id).value);
-        localStorage.setItem(STORE_KEY, JSON.stringify({ blRows, lkRows, form }));
+        const form = {};
+        FORM_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) form[id] = el.value;
+        });
+        localStorage.setItem(STORE_KEY, JSON.stringify({ blRows, hrRows, lkRows, form }));
     } catch (e) {}
 }
 
@@ -22,39 +54,103 @@ function loadState() {
     try {
         const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
         if (!s) return false;
-        blRows = s.blRows || []; lkRows = s.lkRows || [];
-        FORM_IDS.forEach(id => { if (s.form && id in s.form) document.getElementById(id).value = s.form[id]; });
+        blRows = s.blRows || [];
+        hrRows = s.hrRows || [];
+        lkRows = s.lkRows || [];
+        FORM_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && s.form && id in s.form) el.value = s.form[id];
+        });
         return true;
     } catch (e) { return false; }
 }
 
 function resetAll() {
-    if (!confirm('Hapus semua isian di perangkat ini? Tindakan ini tidak bisa dibatalkan.')) return;
+    if (!confirm('Hapus semua isian kuesioner di perangkat ini? Tindakan ini tidak bisa dibatalkan.')) return;
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
     location.reload();
 }
 
+function exportJSON() {
+    const form = {};
+    FORM_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) form[id] = el.value;
+    });
+    const payload = {
+        aplikasi: "SPKRT 2027 Digital Form",
+        waktu_ekspor: new Date().toISOString(),
+        wilayah: getWilayahObj().nama,
+        identitas_dan_tahunan: form,
+        vpkrt27_bl: blRows,
+        vpkrt27_hr: hrRows,
+        vpkrt27_lk: lkRows,
+        log_validasi: validationLogs
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `SPKRT2027_${form.p_nks || 'SAMPEL'}.json`;
+    a.click();
+}
+
 function loadDemo() {
-    if ((blRows.length || lkRows.length) && !confirm('Isian BL & LK saat ini akan diganti data contoh. Lanjutkan?')) return;
-    const set = (id, v) => document.getElementById(id).value = v;
-    set('p_nks','0012B'); set('p_krt','Contoh KRT'); set('p_art_total',4); set('p_art_bekerja',2); set('p_arte_13',3);
-    set('s_pendidikan',1500000); set('s_art_sekolah',1); set('s_nilai_sewa',800000);
+    if ((blRows.length || hrRows.length || lkRows.length) && !confirm('Isian saat ini akan diganti data contoh (termasuk Gas Alam / Jargas). Lanjutkan?')) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('selectWilayah', '6571');
+    set('p_nks', '0012B');
+    set('p_krt', 'Budi Santoso');
+    set('p_art_total', 4);
+    set('p_art_bekerja', 2);
+    set('p_arte_13', 3);
+    set('p_rencana_pindah', 'TIDAK');
+    set('s_pendidikan', 1500000);
+    set('s_art_sekolah', 1);
+    set('s_status_rumah', 'MILIK_SENDIRI');
+    set('s_nilai_sewa', 1200000);
+    set('s_kesehatan_thn', 450000);
+    set('s_pajak_thn', 650000);
+
     blRows = [
-        { kode:"0341001001", nama:"LISTRIK - PASCA BAYAR", metode:"KAS", pasar:"5", cash:250000, dp:0 },
-        { kode:"0431004001", nama:"MESIN CUCI", metode:"KREDIT", pasar:"5", cash:3600000, dp:1000000 }
+        { kode: "0342001001", nama: "GAS BUMI RUMAH TANGGA - RUMAH TANGGA GOLONGAN I / PELANGGAN KECIL (RT-1)", sumber: "BL", metode: "KAS", pasar: "3", cash: 65000, dp: 0 },
+        { kode: "0341001001", nama: "LISTRIK - PASCA BAYAR", sumber: "BL", metode: "KAS", pasar: "5", cash: 320000, dp: 0 },
+        { kode: "0431004001", nama: "MESIN CUCI", sumber: "BL", metode: "KREDIT", pasar: "5", cash: 3600000, dp: 1000000 }
+    ];
+    hrRows = [
+        { hari: "1", sumber: "HR", kode: "0111001057", nama: "BERAS - BULOG MEDIUM", qty: 2, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 32000, pasar: "1" },
+        { hari: "1", sumber: "HRp", kode: "0121001003", nama: "AIR MINERAL - AQUA", qty: 1, satuanLokal: "Botol", konversi: 0.6, satuan: "Liter", nilai: 5000, pasar: "3" },
+        { hari: "2", sumber: "HR", kode: "0112004001", nama: "DAGING AYAM RAS", qty: 1.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 63000, pasar: "2" },
+        { hari: "4", sumber: "HR", kode: "0111001057", nama: "BERAS - BULOG MEDIUM", qty: 1.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 24000, pasar: "1" }
     ];
     lkRows = [
-        { kode:"0111001057", nama:"BERAS - BULOG MEDIUM", totalHarian:3.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:49000 },
-        { kode:"0112004001", nama:"DAGING AYAM RAS", totalHarian:1.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:57000 }
+        { kode: "0111001057", nama: "BERAS - BULOG MEDIUM", totalHarian: 3.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 56000 },
+        { kode: "0112004001", nama: "DAGING AYAM RAS", totalHarian: 1.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 63000 }
     ];
-    runValidationP(); runValidationS(); renderBL(); renderLK();
+    onWilayahChange();
+    runValidationP();
+    runValidationS();
+    renderHR();
+    renderLK();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!loadState()) { blRows = [newBL()]; lkRows = [newLK()]; }
+    if (!loadState()) {
+        blRows = [newBL()];
+        hrRows = [newHR()];
+        lkRows = [newLK()];
+    }
+    if (!blRows.length) blRows = [newBL()];
+    if (!hrRows.length) hrRows = [newHR()];
+    if (!lkRows.length) lkRows = [newLK()];
     loading = false;
-    runValidationP(); runValidationS(); renderBL(); renderLK(); renderCatalog();
+    onWilayahChange();
+    runValidationP();
+    runValidationS();
+    renderHR();
+    renderLK();
+    renderCatalog();
 });
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideDropdown(); });
 window.addEventListener('scroll', () => hideDropdown(), true);
 window.addEventListener('resize', () => hideDropdown());
@@ -85,7 +181,7 @@ function runValidationP() {
     const resDiv = document.getElementById('resultEligibilityP');
     if (document.getElementById('p_art_total').value === '') {
         resDiv.className = "alert alert-info mt-3";
-        resDiv.innerHTML = `<i class="fa-solid fa-circle-info"></i> Isi jumlah ART untuk melihat hasil eligibilitas.`;
+        resDiv.innerHTML = `<i class="fa-solid fa-circle-info"></i> Isi jumlah ART untuk melihat hasil eligibilitas sampel rumah tangga.`;
         updateValidationDashboard();
         return;
     }
@@ -121,11 +217,11 @@ function runValidationP() {
             <p><em>Prosedur PPL: Ganti sampel menggunakan Form FPPS ke BPS Kabupaten/Kota.</em></p>
         `;
     }
-    updateValidationDashboard();
+    updateTotalsLK();
 }
 
 // -------------------------------------------------------------
-// AUTOCOMPLETE ENGINE MASTER BUKU 5 (OPTIMASI 40.998 ITEM)
+// AUTOCOMPLETE ENGINE MASTER BUKU 5 (40.998 ITEM)
 // -------------------------------------------------------------
 let activeInputTarget = null;
 let activeRowIndex = null;
@@ -156,7 +252,9 @@ function showCommoditySearch(event, inputElem, type, rowIndex) {
     activeInputTarget = inputElem;
     activeRowIndex = rowIndex;
     activeTargetType = type;
-    const row = (type === 'BL' ? blRows : lkRows)[rowIndex];
+
+    const listRef = type === 'BL' ? blRows : (type === 'HR' ? hrRows : lkRows);
+    const row = listRef[rowIndex];
     if (row) {
         row.nama = inputElem.value;
         row.kode = '';
@@ -174,7 +272,6 @@ function showCommoditySearch(event, inputElem, type, rowIndex) {
     }
 
     const filtered = searchMaster(query, 15);
-
     if (filtered.length === 0) {
         dropdown.style.display = 'none';
         return;
@@ -183,7 +280,7 @@ function showCommoditySearch(event, inputElem, type, rowIndex) {
     const rect = inputElem.getBoundingClientRect();
     dropdown.style.top = `${rect.bottom + window.scrollY}px`;
     dropdown.style.left = `${rect.left + window.scrollX}px`;
-    dropdown.style.width = `${Math.max(rect.width, 360)}px`;
+    dropdown.style.width = `${Math.max(rect.width, 380)}px`;
     dropdown.style.display = 'block';
 
     dropdown.innerHTML = filtered.map(item => `
@@ -208,6 +305,12 @@ function selectCommodityById(id) {
         blRows[activeRowIndex].kode = item.kode;
         blRows[activeRowIndex].nama = labelLengkap;
         renderBL();
+    } else if (activeTargetType === 'HR') {
+        hrRows[activeRowIndex].kode = item.kode;
+        hrRows[activeRowIndex].nama = labelLengkap;
+        hrRows[activeRowIndex].satuan = item.satuan;
+        hrRows[activeRowIndex].satuanLokal = item.satuan;
+        renderHR();
     } else if (activeTargetType === 'LK') {
         lkRows[activeRowIndex].kode = item.kode;
         lkRows[activeRowIndex].nama = labelLengkap;
@@ -219,19 +322,20 @@ function selectCommodityById(id) {
 
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#autocompleteDropdown') && !e.target.closest('input')) {
-        document.getElementById('autocompleteDropdown').style.display = 'none';
+        hideDropdown();
     }
 });
 
 // -------------------------------------------------------------
 // TAB 2: VPKRT27-BL ENGINE
 // -------------------------------------------------------------
-const newBL = () => ({ kode: "", nama: "", metode: "KAS", pasar: "1", cash: "", dp: "" });
+const newBL = () => ({ kode: "", nama: "", sumber: "BL", metode: "KAS", pasar: "1", cash: "", dp: "" });
+const newHR = () => ({ hari: "1", sumber: "HR", kode: "", nama: "", qty: "", satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: "", pasar: "1" });
 const newLK = () => ({ kode: "", nama: "", totalHarian: "", satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: "" });
-const sel = (v, cur) => v === cur ? 'selected' : '';
+const sel = (v, cur) => String(v) === String(cur) ? 'selected' : '';
 
 function addRowBL() { blRows.push(newBL()); renderBL(); }
-function removeRowBL(idx) { blRows.splice(idx, 1); renderBL(); }
+function removeRowBL(idx) { blRows.splice(idx, 1); if (!blRows.length) blRows.push(newBL()); renderBL(); }
 
 function calcBL(row) {
     const cash = parseFloat(row.cash) || 0, dp = parseFloat(row.dp) || 0;
@@ -239,8 +343,14 @@ function calcBL(row) {
     if (!row.kode) return ['badge-warning', 'Pilih komoditas dari daftar'];
     if (row.metode === 'KREDIT' && !dp) return ['badge-warning', 'Kredit: DP/cicilan kosong'];
     if (row.metode === 'KAS' && dp) return ['badge-warning', 'Tunai tapi ada DP/cicilan'];
-    if (!cash) return ['badge-warning', 'Harga belum diisi'];
-    return ['badge-success', 'Valid'];
+    if (!cash) return ['badge-warning', 'Nilai tunai belum diisi'];
+
+    const range = getRangeHarga(row.kode);
+    if (range && cash > 0) {
+        if (cash < range.min) return ['badge-warning', `Di bawah range wilayah (min ${rp(range.min)})`];
+        if (cash > range.max) return ['badge-warning', `Di atas range wilayah (maks ${rp(range.max)})`];
+    }
+    return ['badge-success', 'Valid & Wajar'];
 }
 
 function setBL(idx, field, val) {
@@ -264,40 +374,150 @@ function renderBL() {
         const [cls, txt] = calcBL(row);
         return `<tr data-i="${idx}">
             <td>${idx + 1}</td>
-            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik nama komoditas..." autocomplete="off" aria-label="Komoditas baris ${idx + 1}" oninput="showCommoditySearch(event, this, 'BL', ${idx})"></td>
-            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode" aria-label="Kode"></td>
-            <td><select onchange="setBL(${idx},'metode',this.value)"><option value="KAS" ${sel('KAS', row.metode)}>Beli Tunai (Kas)</option><option value="KREDIT" ${sel('KREDIT', row.metode)}>Kredit / Cicilan</option></select></td>
+            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas (misal: Gas Alam, Listrik)..." autocomplete="off" oninput="showCommoditySearch(event, this, 'BL', ${idx})"></td>
+            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode"></td>
+            <td><select onchange="setBL(${idx},'sumber',this.value)">
+                <option value="BL" ${sel('BL', row.sumber)}>BL (Utama RT)</option>
+                <option value="BLp" ${sel('BLp', row.sumber)}>BLp (ARTE Mandiri)</option>
+            </select></td>
+            <td><select onchange="setBL(${idx},'metode',this.value)">
+                <option value="KAS" ${sel('KAS', row.metode)}>Beli Tunai (Kas)</option>
+                <option value="KREDIT" ${sel('KREDIT', row.metode)}>Kredit / Cicilan</option>
+                <option value="PRODUKSI" ${sel('PRODUKSI', row.metode)}>Produksi Sendiri/Pemberian</option>
+            </select></td>
             <td><select onchange="setBL(${idx},'pasar',this.value)">
                 <option value="1" ${sel('1', row.pasar)}>1. Pasar Tradisional</option>
-                <option value="2" ${sel('2', row.pasar)}>2. Supermarket</option>
-                <option value="3" ${sel('3', row.pasar)}>3. Toko Khusus</option>
-                <option value="5" ${sel('5', row.pasar)}>5. Online/Marketplace</option></select></td>
+                <option value="2" ${sel('2', row.pasar)}>2. Supermarket/Minimarket</option>
+                <option value="3" ${sel('3', row.pasar)}>3. Toko Khusus / PLN / PGN</option>
+                <option value="4" ${sel('4', row.pasar)}>4. Jasa / Perorangan</option>
+                <option value="5" ${sel('5', row.pasar)}>5. Online / Marketplace</option>
+            </select></td>
             <td><input type="number" min="0" inputmode="numeric" value="${esc(row.cash)}" oninput="setBL(${idx},'cash',this.value)"></td>
             <td><input type="number" min="0" inputmode="numeric" value="${esc(row.dp)}" oninput="setBL(${idx},'dp',this.value)"></td>
             <td class="c-status"><span class="badge ${cls}">${txt}</span></td>
-            <td><button class="btn btn-danger btn-sm" onclick="removeRowBL(${idx})" aria-label="Hapus baris ${idx + 1}"><i class="fa-solid fa-trash"></i></button></td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeRowBL(${idx})" title="Hapus baris"><i class="fa-solid fa-trash"></i></button></td>
         </tr>`;
     }).join('');
     updateTotalsBL();
 }
 
 // -------------------------------------------------------------
+// TAB 3: VPKRT27-HR & HRp ENGINE (FORM ISIAN AKTIF 7 HARI)
+// -------------------------------------------------------------
+function setFilterHariHR(hari, btn) {
+    hrDayFilter = hari;
+    document.querySelectorAll('#hrDayFilterBar .day-pill').forEach(el => el.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderHR();
+}
+
+function addRowHR() {
+    const row = newHR();
+    if (hrDayFilter !== 'ALL') row.hari = hrDayFilter;
+    hrRows.push(row);
+    renderHR();
+}
+
+function removeRowHR(idx) {
+    hrRows.splice(idx, 1);
+    if (!hrRows.length) hrRows.push(newHR());
+    renderHR();
+}
+
+function setHR(idx, field, val) {
+    hrRows[idx][field] = val;
+    updateTotalsHR();
+}
+
+function updateTotalsHR() {
+    const totHR = hrRows.filter(r => r.sumber === 'HR').reduce((s, r) => s + (parseFloat(r.nilai) || 0), 0);
+    const totHRp = hrRows.filter(r => r.sumber === 'HRp').reduce((s, r) => s + (parseFloat(r.nilai) || 0), 0);
+    document.getElementById('totalHRUtama').innerText = rp(totHR);
+    document.getElementById('totalHRpARTE').innerText = rp(totHRp);
+    document.getElementById('totalHRGabungan').innerText = rp(totHR + totHRp);
+    saveState();
+}
+
+function renderHR() {
+    const tbody = document.getElementById('tbodyHR');
+    const visible = hrRows.map((r, idx) => ({ r, idx })).filter(x => hrDayFilter === 'ALL' || String(x.r.hari) === String(hrDayFilter));
+    tbody.innerHTML = visible.map(({ r, idx }, visNo) => `
+        <tr data-i="${idx}">
+            <td>${visNo + 1}</td>
+            <td><select onchange="setHR(${idx},'hari',this.value)">
+                ${[1,2,3,4,5,6,7].map(d => `<option value="${d}" ${sel(d, r.hari)}>Hari ${d}</option>`).join('')}
+            </select></td>
+            <td><select onchange="setHR(${idx},'sumber',this.value)">
+                <option value="HR" ${sel('HR', r.sumber)}>HR Utama</option>
+                <option value="HRp" ${sel('HRp', r.sumber)}>HRp (ARTE)</option>
+            </select></td>
+            <td><input type="text" value="${esc(r.nama)}" placeholder="Ketik komoditas harian..." autocomplete="off" oninput="showCommoditySearch(event, this, 'HR', ${idx})"></td>
+            <td><input type="text" value="${esc(r.kode)}" readonly tabindex="-1" class="bg-gray c-kode"></td>
+            <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(r.qty)}" oninput="setHR(${idx},'qty',this.value)"></td>
+            <td><input type="text" value="${esc(r.satuanLokal)}" oninput="setHR(${idx},'satuanLokal',this.value)"></td>
+            <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(r.konversi)}" oninput="setHR(${idx},'konversi',this.value)"></td>
+            <td><input type="number" min="0" inputmode="numeric" value="${esc(r.nilai)}" oninput="setHR(${idx},'nilai',this.value)"></td>
+            <td><select onchange="setHR(${idx},'pasar',this.value)">
+                <option value="1" ${sel('1', r.pasar)}>1. Pasar Tradisional</option>
+                <option value="2" ${sel('2', r.pasar)}>2. Supermarket/Minimarket</option>
+                <option value="3" ${sel('3', r.pasar)}>3. Warung / Kantin</option>
+                <option value="4" ${sel('4', r.pasar)}>4. Pedagang Keliling</option>
+                <option value="5" ${sel('5', r.pasar)}>5. Online / GoFood / Grab</option>
+            </select></td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeRowHR(${idx})" title="Hapus baris"><i class="fa-solid fa-trash"></i></button></td>
+        </tr>
+    `).join('');
+    updateTotalsHR();
+}
+
+function rekapHRkeLK() {
+    const validHR = hrRows.filter(r => r.kode && ((parseFloat(r.qty) || 0) > 0 || (parseFloat(r.nilai) || 0) > 0));
+    if (!validHR.length) {
+        alert('Belum ada isian harian HR/HRp yang memiliki kode komoditas & kuantitas/nilai untuk direkap.');
+        return;
+    }
+    const grouped = {};
+    validHR.forEach(r => {
+        if (!grouped[r.kode]) {
+            grouped[r.kode] = {
+                kode: r.kode,
+                nama: r.nama,
+                totalHarian: 0,
+                satuanLokal: r.satuan || r.satuanLokal || 'Kg',
+                konversi: 1,
+                satuan: r.satuan || 'Kg',
+                nilai: 0
+            };
+        }
+        const stdQty = (parseFloat(r.qty) || 0) * (parseFloat(r.konversi) || 1);
+        grouped[r.kode].totalHarian += stdQty;
+        grouped[r.kode].nilai += (parseFloat(r.nilai) || 0);
+    });
+    lkRows = Object.values(grouped).map(g => ({
+        ...g,
+        totalHarian: Number(g.totalHarian.toFixed(3))
+    }));
+    renderLK();
+    switchTab('vpkrt-lk');
+}
+
+// -------------------------------------------------------------
 // TAB 4: VPKRT27-LK ENGINE (MAKANAN)
 // -------------------------------------------------------------
 function addRowLK() { lkRows.push(newLK()); renderLK(); }
-function removeRowLK(idx) { lkRows.splice(idx, 1); renderLK(); }
+function removeRowLK(idx) { lkRows.splice(idx, 1); if (!lkRows.length) lkRows.push(newLK()); renderLK(); }
 
 function calcLK(row) {
     const stdQty = (parseFloat(row.totalHarian) || 0) * (parseFloat(row.konversi) || 1);
     const nilai = parseFloat(row.nilai) || 0;
     const harga = stdQty > 0 ? Math.round(nilai / stdQty) : 0;
     const artTotal = parseInt(document.getElementById('p_art_total').value) || 0;
-    const range = MASTER_RANGE_HARGA.range[row.kode] || (row.kode ? MASTER_RANGE_HARGA.range[row.kode.slice(0, 7)] : null);
+    const range = getRangeHarga(row.kode);
     const master = MASTER_KOMODITAS.find(k => k.kode === row.kode);
     const issues = [];
     if (range && stdQty > 0) {
-        if (harga < range.min) issues.push({ lv: 'danger', t: `Terlalu murah (min ${rp(range.min)})`, msg: `Harga implisit ${rp(harga)} di bawah range wajar (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
-        else if (harga > range.max) issues.push({ lv: 'warning', t: `Terlalu mahal (maks ${rp(range.max)})`, msg: `Harga implisit ${rp(harga)} di atas range wajar (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
+        if (harga < range.min) issues.push({ lv: 'danger', t: `Terlalu murah (min ${rp(range.min)})`, msg: `Harga implisit ${rp(harga)} di bawah range wajar wilayah (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
+        else if (harga > range.max) issues.push({ lv: 'warning', t: `Terlalu mahal (maks ${rp(range.max)})`, msg: `Harga implisit ${rp(harga)} di atas range wajar wilayah (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
     }
     if (master && artTotal > 0 && stdQty / artTotal > master.batas_max_perkapita) {
         const pk = (stdQty / artTotal).toFixed(2);
@@ -337,8 +557,8 @@ function renderLK() {
         const c = calcLK(row);
         return `<tr data-i="${idx}">
             <td>${idx + 1}</td>
-            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas makanan..." autocomplete="off" aria-label="Komoditas baris ${idx + 1}" oninput="showCommoditySearch(event, this, 'LK', ${idx})"></td>
-            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode" aria-label="Kode"></td>
+            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas makanan..." autocomplete="off" oninput="showCommoditySearch(event, this, 'LK', ${idx})"></td>
+            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode"></td>
             <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(row.totalHarian)}" oninput="setLK(${idx},'totalHarian',this.value)"></td>
             <td><input type="text" value="${esc(row.satuanLokal)}" oninput="setLK(${idx},'satuanLokal',this.value)"></td>
             <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(row.konversi)}" oninput="setLK(${idx},'konversi',this.value)"></td>
@@ -346,7 +566,7 @@ function renderLK() {
             <td><input type="number" min="0" inputmode="numeric" value="${esc(row.nilai)}" oninput="setLK(${idx},'nilai',this.value)"></td>
             <td class="c-harga">${rp(c.harga)}</td>
             <td class="c-status">${lkStatusHTML(c, row)}</td>
-            <td><button class="btn btn-danger btn-sm" onclick="removeRowLK(${idx})" aria-label="Hapus baris ${idx + 1}"><i class="fa-solid fa-trash"></i></button></td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeRowLK(${idx})" title="Hapus baris"><i class="fa-solid fa-trash"></i></button></td>
         </tr>`;
     }).join('');
     updateTotalsLK();
@@ -358,12 +578,22 @@ function renderLK() {
 function runValidationS() {
     const pend = parseInt(document.getElementById('s_pendidikan').value) || 0;
     const artSekolah = parseInt(document.getElementById('s_art_sekolah').value) || 0;
+    const statusRumah = document.getElementById('s_status_rumah').value;
+    const nilaiSewa = parseInt(document.getElementById('s_nilai_sewa').value) || 0;
     const resDiv = document.getElementById('resultValidationS');
 
+    const warnings = [];
     if (artSekolah > 0 && pend === 0) {
+        warnings.push(`Terdapat ${artSekolah} ART bersekolah tetapi pengeluaran pendidikan Rp 0 (wajib catatan beasiswa/gratis).`);
+    }
+    if ((statusRumah === 'MILIK_SENDIRI' || statusRumah === 'BEBAS_SEWA') && nilaiSewa === 0 && document.getElementById('s_nilai_sewa').value !== '') {
+        warnings.push("Status rumah Milik Sendiri / Bebas Sewa wajib diisi perkiraan nilai sewa per bulan (> Rp 0).");
+    }
+
+    if (warnings.length) {
         resDiv.className = "alert alert-warning";
-        resDiv.innerHTML = `<h4><i class="fa-solid fa-triangle-exclamation"></i> PERINGATAN KONSISTENSI BUKU 4</h4>
-        <p>Terdapat ${artSekolah} ART bersekolah tetapi pengeluaran pendidikan Rp 0. PPL/PML wajib memberikan catatan pendukung jika beasiswa penuh.</p>`;
+        resDiv.innerHTML = `<h4><i class="fa-solid fa-triangle-exclamation"></i> PERINGATAN KONSISTENSI VPKRT27-S (BUKU 4)</h4>
+        <ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul>`;
     } else {
         resDiv.className = "alert alert-success";
         resDiv.innerHTML = `<h4><i class="fa-solid fa-circle-check"></i> ISIAN VPKRT27-S KONSISTEN LOGIS</h4>`;
@@ -377,13 +607,25 @@ function runValidationS() {
 function updateValidationDashboard() {
     validationLogs = [];
 
-    // Check P
     const artTotal = parseInt(document.getElementById('p_art_total').value) || 0;
     if (document.getElementById('p_art_total').value !== '' && (artTotal < 2 || artTotal > 10)) {
         validationLogs.push({ kuesioner: "VPKRT27-P", rincian: "Jumlah ART Total", level: "ERROR", pesan: `Jumlah ART (${artTotal}) di luar batas 2-10 orang.`, aksi: "Konfirmasi ulang keberadaan ART atau lakukan penggantian sampel." });
     }
 
-    // Check LK (outlier harga & batas per kapita)
+    blRows.forEach(row => {
+        const cash = parseFloat(row.cash) || 0;
+        const range = getRangeHarga(row.kode);
+        if (range && cash > 0 && (cash < range.min || cash > range.max)) {
+            validationLogs.push({
+                kuesioner: "VPKRT27-BL",
+                rincian: row.nama || row.kode,
+                level: "WARNING",
+                pesan: `Nilai ${rp(cash)} di luar acuan wajar wilayah ${getWilayahObj().nama} (${rp(range.min)} - ${rp(range.max)}).`,
+                aksi: "Periksa satuan tagihan/pembelian atau beri catatan pemakaian khusus."
+            });
+        }
+    });
+
     lkRows.forEach(row => {
         calcLK(row).issues.forEach(i => validationLogs.push({ kuesioner: "VPKRT27-LK", rincian: row.nama, level: "WARNING", pesan: i.msg, aksi: i.aksi }));
     });
@@ -442,7 +684,7 @@ function filterCatalog() {
 
     const preview = matched.slice(0, 100);
     const infoRow = matched.length > 100
-        ? `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Menampilkan <strong>100</strong> dari <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas yang cocok. Ketik kata kunci lebih spesifik (misal: <code>beras pandan</code> atau <code>0111001</code>) untuk menyaring hasil.</td></tr>`
+        ? `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Menampilkan <strong>100</strong> dari <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas yang cocok. Ketik kata kunci lebih spesifik (misal: <code>gas alam</code>, <code>beras pandan</code>, atau <code>0342001</code>) untuk menyaring hasil.</td></tr>`
         : `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Total ditemukan: <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas/kualitas.</td></tr>`;
 
     tbody.innerHTML = infoRow + preview.map(item => `

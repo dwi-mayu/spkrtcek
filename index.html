@@ -20,12 +20,32 @@
                 </div>
             </div>
             <div class="header-badges">
-                <span class="badge badge-bps"><i class="fa-solid fa-shield-halved"></i> Standar Buku 1-5</span>
-                <button class="btn btn-ghost" onclick="loadDemo()"><i class="fa-solid fa-wand-magic-sparkles"></i> Isi Contoh</button>
-                <button class="btn btn-ghost" onclick="resetAll()"><i class="fa-solid fa-eraser"></i> Hapus Semua Isian</button>
+                <span class="badge badge-bps"><i class="fa-solid fa-database"></i> 40.998 Komoditas Buku 5</span>
+                <button class="btn btn-ghost" onclick="loadDemo()"><i class="fa-solid fa-wand-magic-sparkles"></i> Isi Contoh (Termasuk Gas Alam)</button>
+                <button class="btn btn-ghost" onclick="exportJSON()"><i class="fa-solid fa-file-export"></i> Ekspor JSON</button>
+                <button class="btn btn-ghost" onclick="resetAll()"><i class="fa-solid fa-eraser"></i> Reset Isian</button>
             </div>
         </div>
     </header>
+
+    <!-- BAR PEMILIH WILAYAH -->
+    <div class="region-bar">
+        <div class="region-container">
+            <div class="region-selector-group">
+                <label for="selectWilayah"><i class="fa-solid fa-map-location-dot"></i> Pilih Wilayah Pencacahan:</label>
+                <select id="selectWilayah" onchange="onWilayahChange()">
+                    <option value="6571">6571 - Kota Tarakan (Kalimantan Utara - Jargas PGN)</option>
+                    <option value="6472">6472 - Kota Samarinda (Kalimantan Timur)</option>
+                    <option value="6501">6501 - Kab. Bulungan / Tanjung Selor (Kalimantan Utara)</option>
+                    <option value="3100">3100 - DKI Jakarta & Jabodetabek</option>
+                    <option value="0000">0000 - Standar Nasional BPS (Umum)</option>
+                </select>
+            </div>
+            <div class="region-note" id="wilayahNote">
+                Acuan range harga & tarif lokal aktif sesuai wilayah terpilih.
+            </div>
+        </div>
+    </div>
 
     <nav class="app-nav">
         <div class="nav-container">
@@ -34,7 +54,6 @@
             <button class="nav-tab" onclick="switchTab('vpkrt-hr')"><i class="fa-solid fa-calendar-day"></i> VPKRT27-HR (Harian 7 Hari)</button>
             <button class="nav-tab" onclick="switchTab('vpkrt-lk')"><i class="fa-solid fa-utensils"></i> VPKRT27-LK & KK (Rekap Makanan)</button>
             <button class="nav-tab" onclick="switchTab('vpkrt-s')"><i class="fa-solid fa-file-invoice-dollar"></i> VPKRT27-S (Tahunan)</button>
-
             <button class="nav-tab nav-tab-alert" onclick="switchTab('log-validasi')"><i class="fa-solid fa-triangle-exclamation"></i> Log Validasi <span class="badge-count" id="logErrorCount">0</span></button>
             <button class="nav-tab" onclick="switchTab('master-buku5')"><i class="fa-solid fa-book-open"></i> Master Buku 5 (Katalog)</button>
         </div>
@@ -49,29 +68,29 @@
                     <span class="tag tag-ppl">Petugas: PPL / PML</span>
                 </div>
                 <div class="card-body">
-                    <form id="formP">
+                    <form id="formP" onsubmit="return false;">
                         <div class="form-grid">
                             <div class="form-group">
                                 <label><i class="fa-solid fa-hashtag"></i> NKS / No. Urut Sampel RT</label>
-                                <input type="text" id="p_nks" placeholder="Misal: 0012B">
+                                <input type="text" id="p_nks" placeholder="Misal: 0012B" oninput="saveState()">
                             </div>
                             <div class="form-group">
                                 <label><i class="fa-solid fa-user"></i> Nama Kepala Rumah Tangga (KRT)</label>
-                                <input type="text" id="p_krt" placeholder="Nama KRT">
+                                <input type="text" id="p_krt" placeholder="Nama KRT" oninput="saveState()">
                             </div>
                             <div class="form-group">
                                 <label><i class="fa-solid fa-users"></i> Jumlah ART Total (Rincian 1)</label>
-                                <input type="number" id="p_art_total" min="1" max="20" onchange="runValidationP()">
+                                <input type="number" id="p_art_total" min="1" max="20" oninput="runValidationP()">
                                 <small class="help-text">Kriteria Syarat: 2 s.d. 10 orang</small>
                             </div>
                             <div class="form-group">
                                 <label><i class="fa-solid fa-briefcase"></i> Jumlah ART Bekerja/Berusaha (Rincian 4)</label>
-                                <input type="number" id="p_art_bekerja" min="0" max="20" onchange="runValidationP()">
+                                <input type="number" id="p_art_bekerja" min="0" max="20" oninput="runValidationP()">
                                 <small class="help-text">Kriteria Syarat: Minimal 1 ART bekerja</small>
                             </div>
                             <div class="form-group">
                                 <label><i class="fa-solid fa-user-graduate"></i> Jumlah ARTE Berusia &ge; 13 Tahun</label>
-                                <input type="number" id="p_arte_13" min="0" max="20" onchange="runValidationP()">
+                                <input type="number" id="p_arte_13" min="0" max="20" oninput="runValidationP()">
                                 <small class="help-text">Dasar pembagian kuesioner VPKRT27-BLp & HRp</small>
                             </div>
                             <div class="form-group">
@@ -83,9 +102,7 @@
                             </div>
                         </div>
 
-                        <div class="result-box mt-3" id="resultEligibilityP">
-                            <!-- Results auto populated -->
-                        </div>
+                        <div class="result-box mt-3" id="resultEligibilityP"></div>
                     </form>
                 </div>
             </div>
@@ -100,30 +117,31 @@
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
-                        <i class="fa-solid fa-lightbulb"></i> <strong>Pencarian Komoditas Otomatis:</strong> Ketik kode atau nama barang (seperti <em>Listrik, Sabun, Seragam, Servis AC, Tokopedia</em>) pada kolom pencarian untuk memanggil data Master Buku 5 dan pengelompokan jenis pasar otomatis.
+                        <i class="fa-solid fa-lightbulb"></i> <strong>Pencarian Komoditas Buku 5:</strong> Ketik nama barang/jasa seperti <em>Gas Alam, Gas Bumi, Listrik, Elpiji, Sabun, Seragam, Pulsa</em> untuk otomatis memanggil kode 10-digit dan validasi harga wajar wilayah.
                     </div>
 
                     <div class="table-responsive">
                         <table class="table-entry" id="tableBL">
                             <thead>
                                 <tr>
-                                    <th style="width: 50px;">No</th>
-                                    <th>Cari / Ketik Komoditas (Buku 5)</th>
-                                    <th style="width: 120px;">Kode</th>
-                                    <th>Metode Perolehan</th>
-                                    <th>Jenis Pasar (1-5)</th>
-                                    <th>Harga Cash (Rp)</th>
-                                    <th>DP / Cicilan (Rp)</th>
-                                    <th>Status Outlier / Validasi</th>
+                                    <th style="width: 45px;">No</th>
+                                    <th style="min-width: 240px;">Cari / Ketik Komoditas (Buku 5)</th>
+                                    <th style="width: 115px;">Kode</th>
+                                    <th style="width: 145px;">Sumber Dokumen</th>
+                                    <th style="width: 150px;">Metode Perolehan</th>
+                                    <th style="width: 165px;">Jenis Pasar (1-5)</th>
+                                    <th style="width: 130px;">Nilai Tunai/Cash (Rp)</th>
+                                    <th style="width: 130px;">DP / Cicilan (Rp)</th>
+                                    <th style="min-width: 160px;">Status Outlier / Validasi</th>
                                     <th style="width: 50px;">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody id="tbodyBL">
-                                <!-- Dynamic rows -->
-                            </tbody>
+                            <tbody id="tbodyBL"></tbody>
                         </table>
                     </div>
-                    <button class="btn btn-secondary mt-2" onclick="addRowBL()"><i class="fa-solid fa-plus"></i> Tambah Baris Komoditas BL</button>
+                    <div class="action-bar-row">
+                        <button class="btn btn-primary" onclick="addRowBL()"><i class="fa-solid fa-plus"></i> Tambah Baris Komoditas BL</button>
+                    </div>
 
                     <div class="summary-card mt-3">
                         <div class="summary-item">
@@ -131,7 +149,7 @@
                             <strong id="totalKonsumsiBL">Rp 0</strong>
                         </div>
                         <div class="summary-item">
-                            <span>Total Transaksi Kredit / Tabungan (Bukan Konsumsi):</span>
+                            <span>Total Transaksi Kredit / Cicilan (Bukan Konsumsi):</span>
                             <strong id="totalNonKonsumsiBL">Rp 0</strong>
                         </div>
                     </div>
@@ -139,64 +157,68 @@
             </div>
         </section>
 
-        <!-- TAB 3: VPKRT27-HR -->
+        <!-- TAB 3: VPKRT27-HR (FORM ISIAN AKTIF 7 HARI + AUTO REKAP KE LK) -->
         <section id="tab-vpkrt-hr" class="tab-content">
             <div class="card">
                 <div class="card-header">
                     <h2><i class="fa-solid fa-calendar-days"></i> Form VPKRT27-HR & HRp: Catatan Konsumsi Harian (7 Hari)</h2>
-                    <span class="tag tag-ppl">Minggu Khusus Bulan ke-3</span>
+                    <span class="tag tag-ppl">Form Input Aktif Minggu Khusus Bulan ke-3</span>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-warning"><i class="fa-solid fa-circle-info"></i> Tabel di bawah hanya <strong>contoh ilustrasi format</strong>, belum berupa form isian.</div>
-                    <p class="description">Gunakan lembar kerja ini untuk memverifikasi pencatatan harian bahan makanan, makanan jadi, dan rokok dari kuesioner utama (HR) dan kuesioner mandiri ARTE (HRp) selama 7 hari berturut-turut.</p>
-                    
-                    <div class="table-responsive mt-2">
+                    <div class="alert alert-info">
+                        <i class="fa-solid fa-pen-to-square"></i> <strong>Form Isian Harian Interaktif:</strong> Catat pengeluaran konsumsi makanan, minuman, dan rokok setiap hari (Hari ke-1 s.d. Hari ke-7) dari <strong>HR Utama</strong> maupun <strong>HRp (ARTE)</strong>. Klik <strong>Rekap Otomatis ke VPKRT27-LK</strong> untuk menjumlahkan per komoditas ke lembar rekapitulasi mingguan.
+                    </div>
+
+                    <div class="day-filter-bar" id="hrDayFilterBar">
+                        <button class="day-pill active" onclick="setFilterHariHR('ALL', this)">Semua Hari (1-7)</button>
+                        <button class="day-pill" onclick="setFilterHariHR('1', this)">Hari 1</button>
+                        <button class="day-pill" onclick="setFilterHariHR('2', this)">Hari 2</button>
+                        <button class="day-pill" onclick="setFilterHariHR('3', this)">Hari 3</button>
+                        <button class="day-pill" onclick="setFilterHariHR('4', this)">Hari 4</button>
+                        <button class="day-pill" onclick="setFilterHariHR('5', this)">Hari 5</button>
+                        <button class="day-pill" onclick="setFilterHariHR('6', this)">Hari 6</button>
+                        <button class="day-pill" onclick="setFilterHariHR('7', this)">Hari 7</button>
+                    </div>
+
+                    <div class="table-responsive">
                         <table class="table-entry" id="tableHR">
                             <thead>
                                 <tr>
-                                    <th>Hari / Tanggal</th>
-                                    <th>Sumber Catatan</th>
-                                    <th>Uraian Komoditas & Kualitas</th>
-                                    <th>Banyaknya</th>
-                                    <th>Nilai Transaksi (Rp)</th>
-                                    <th>Jenis Pasar</th>
+                                    <th style="width: 45px;">No</th>
+                                    <th style="width: 115px;">Hari Ke-</th>
+                                    <th style="width: 140px;">Sumber Catatan</th>
+                                    <th style="min-width: 230px;">Cari / Ketik Komoditas (Buku 5)</th>
+                                    <th style="width: 110px;">Kode</th>
+                                    <th style="width: 90px;">Banyaknya</th>
+                                    <th style="width: 100px;">Satuan Lokal</th>
+                                    <th style="width: 90px;">Konversi</th>
+                                    <th style="width: 130px;">Nilai Transaksi (Rp)</th>
+                                    <th style="width: 160px;">Jenis Pasar</th>
+                                    <th style="width: 50px;">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Hari 1 (Senin)</td>
-                                    <td><span class="badge badge-info">HR Utama</span></td>
-                                    <td>Beras Medium (IR-64)</td>
-                                    <td>2 Kg</td>
-                                    <td>Rp 28.000</td>
-                                    <td>Pasar Tradisional</td>
-                                </tr>
-                                <tr>
-                                    <td>Hari 1 (Senin)</td>
-                                    <td><span class="badge badge-warning">HRp (ARTE)</span></td>
-                                    <td>Keripik Seblak Pedas & AMDK Botol</td>
-                                    <td>1 Bks & 1 Btl</td>
-                                    <td>Rp 9.000</td>
-                                    <td>Kantin Sekolah</td>
-                                </tr>
-                                <tr>
-                                    <td>Hari 2 (Selasa)</td>
-                                    <td><span class="badge badge-info">HR Utama</span></td>
-                                    <td>Daging Ayam Ras Karkas</td>
-                                    <td>1 Kg</td>
-                                    <td>Rp 38.000</td>
-                                    <td>Supermarket</td>
-                                </tr>
-                                <tr>
-                                    <td>Hari 3 s.d. 7</td>
-                                    <td><span class="badge badge-info">HR & HRp</span></td>
-                                    <td>Tercatat bertahap pada Lembar Kerja LK...</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                    <td>-</td>
-                                </tr>
-                            </tbody>
+                            <tbody id="tbodyHR"></tbody>
                         </table>
+                    </div>
+
+                    <div class="action-bar-row">
+                        <button class="btn btn-primary" onclick="addRowHR()"><i class="fa-solid fa-plus"></i> Tambah Catatan Harian HR/HRp</button>
+                        <button class="btn btn-success" onclick="rekapHRkeLK()"><i class="fa-solid fa-arrows-rotate"></i> Rekap Otomatis HR (7 Hari) ke VPKRT27-LK</button>
+                    </div>
+
+                    <div class="summary-card mt-3">
+                        <div class="summary-item">
+                            <span>Total Transaksi HR Utama (7 Hari):</span>
+                            <strong id="totalHRUtama">Rp 0</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span>Total Transaksi HRp Mandiri ARTE (7 Hari):</span>
+                            <strong id="totalHRpARTE">Rp 0</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span>Total Gabungan Harian (HR + HRp):</span>
+                            <strong id="totalHRGabungan">Rp 0</strong>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -211,7 +233,7 @@
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
-                        <i class="fa-solid fa-keyboard"></i> <strong>Fitur Pencarian Komoditas Ketik (Typeable):</strong> Ketik nama komoditas makanan pada kolom di bawah. Sistem akan otomatis mengisi kode 10-digit, satuan standar, serta mengecek konversi dan outlier harga wajar.
+                        <i class="fa-solid fa-keyboard"></i> <strong>Rekapitulasi Mingguan (Kolom 13 - 24):</strong> Anda dapat mengisi langsung di tabel ini atau menarik rekap otomatis dari tab <strong>VPKRT27-HR</strong>. Sistem otomatis mengecek konversi satuan, outlier harga wajar wilayah, dan batas maksimum per kapita Buku 4.
                     </div>
 
                     <div class="table-responsive">
@@ -221,22 +243,22 @@
                                     <th style="width: 40px;">No</th>
                                     <th style="min-width: 220px;">Cari / Ketik Komoditas (Buku 5)</th>
                                     <th style="width: 110px;">Kode</th>
-                                    <th style="width: 80px;">Tot H1-H7 (Col 13)</th>
+                                    <th style="width: 85px;">Tot H1-H7 (Col 13)</th>
                                     <th style="width: 100px;">Satuan Lokal</th>
                                     <th style="width: 90px;">Konversi (Col 15)</th>
                                     <th style="width: 110px;">Sat Standar (Col 16)</th>
-                                    <th style="width: 120px;">Nilai Rp (Col 24)</th>
+                                    <th style="width: 125px;">Nilai Rp (Col 24)</th>
                                     <th style="width: 110px;">Harga / Satuan</th>
                                     <th>Cek Outlier / Perkapita (Buku 4)</th>
                                     <th style="width: 50px;">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody id="tbodyLK">
-                                <!-- Dynamic rows -->
-                            </tbody>
+                            <tbody id="tbodyLK"></tbody>
                         </table>
                     </div>
-                    <button class="btn btn-secondary mt-2" onclick="addRowLK()"><i class="fa-solid fa-plus"></i> Tambah Baris Makanan LK</button>
+                    <div class="action-bar-row">
+                        <button class="btn btn-primary" onclick="addRowLK()"><i class="fa-solid fa-plus"></i> Tambah Baris Makanan LK</button>
+                    </div>
 
                     <div class="summary-card mt-3">
                         <div class="summary-item">
@@ -260,15 +282,15 @@
                     <span class="tag tag-pml">Pencacahan Bulan ke-3</span>
                 </div>
                 <div class="card-body">
-                    <form id="formS">
+                    <form id="formS" onsubmit="return false;">
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Pengeluaran Pendidikan 3 Bulan Terakhir (Rp)</label>
-                                <input type="number" id="s_pendidikan" onchange="runValidationS()">
+                                <input type="number" id="s_pendidikan" min="0" oninput="runValidationS()">
                             </div>
                             <div class="form-group">
                                 <label>Jumlah ART Bersekolah (SD - PT)</label>
-                                <input type="number" id="s_art_sekolah" onchange="runValidationS()">
+                                <input type="number" id="s_art_sekolah" min="0" oninput="runValidationS()">
                             </div>
                             <div class="form-group">
                                 <label>Status Kepemilikan Bangunan Tempat Tinggal</label>
@@ -280,13 +302,19 @@
                             </div>
                             <div class="form-group">
                                 <label>Estimasi Sewa Rumah per Bulan (Rp)</label>
-                                <input type="number" id="s_nilai_sewa" onchange="runValidationS()">
+                                <input type="number" id="s_nilai_sewa" min="0" oninput="runValidationS()">
+                            </div>
+                            <div class="form-group">
+                                <label>Pengeluaran Kesehatan & Rawat Inap 1 Tahun (Rp)</label>
+                                <input type="number" id="s_kesehatan_thn" min="0" oninput="runValidationS()">
+                            </div>
+                            <div class="form-group">
+                                <label>Pajak PBB, Kendaraan & Asuransi 1 Tahun (Rp)</label>
+                                <input type="number" id="s_pajak_thn" min="0" oninput="runValidationS()">
                             </div>
                         </div>
 
-                        <div class="result-box mt-3" id="resultValidationS">
-                            <!-- S Validation Results -->
-                        </div>
+                        <div class="result-box mt-3" id="resultValidationS"></div>
                     </form>
                 </div>
             </div>
@@ -300,26 +328,22 @@
                     <span class="tag tag-pml">Pemeriksaan PML (Buku 4)</span>
                 </div>
                 <div class="card-body">
-                    <div class="validation-summary-box mb-3" id="validationSummaryBanner">
-                        <!-- Dynamic Banner -->
-                    </div>
+                    <div class="validation-summary-box mb-3" id="validationSummaryBanner"></div>
 
                     <h3><i class="fa-solid fa-list-check"></i> Daftar Temuan Isian yang Perlu Diklarifikasi:</h3>
                     <div class="table-responsive mt-2">
                         <table class="table-entry" id="tableLog">
                             <thead>
                                 <tr>
-                                    <th style="width: 80px;">No</th>
+                                    <th style="width: 60px;">No</th>
                                     <th style="width: 120px;">Kuesioner</th>
-                                    <th style="width: 180px;">Rincian / Komoditas</th>
-                                    <th style="width: 120px;">Tingkat Error</th>
+                                    <th style="width: 200px;">Rincian / Komoditas</th>
+                                    <th style="width: 110px;">Tingkat</th>
                                     <th>Pesan Temuan & Aturan Buku 4</th>
                                     <th>Rekomendasi Tindakan Petugas</th>
                                 </tr>
                             </thead>
-                            <tbody id="tbodyLog">
-                                <!-- Log rows dynamically generated -->
-                            </tbody>
+                            <tbody id="tbodyLog"></tbody>
                         </table>
                     </div>
                 </div>
@@ -331,12 +355,12 @@
             <div class="card">
                 <div class="card-header">
                     <h2><i class="fa-solid fa-book"></i> Katalog Master Komoditas & Kualitas SPKRT 2027 (Buku 5)</h2>
-                    <span class="tag tag-ppl">Pencarian & Referensi Kode</span>
+                    <span class="tag tag-ppl">40.998 Komoditas & Kualitas</span>
                 </div>
                 <div class="card-body">
                     <div class="search-bar-container">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="catalogSearchInput" class="search-input" placeholder="Ketik nama komoditas, kode 10-digit, atau varian kualitas (misal: Beras, Ayam, Listrik, Tokopedia)..." oninput="filterCatalog()">
+                        <input type="text" id="catalogSearchInput" class="search-input" placeholder="Ketik nama komoditas, kode 10-digit, atau varian kualitas (misal: Gas Alam, Gas Bumi, Beras, Ayam, Listrik)..." oninput="filterCatalog()">
                     </div>
 
                     <div class="table-responsive mt-3">
@@ -351,9 +375,7 @@
                                     <th>Kuesioner Target</th>
                                 </tr>
                             </thead>
-                            <tbody id="tbodyCatalog">
-                                <!-- Catalog dynamic rows -->
-                            </tbody>
+                            <tbody id="tbodyCatalog"></tbody>
                         </table>
                     </div>
                 </div>
@@ -362,11 +384,10 @@
     </main>
 
     <footer class="app-footer">
-        <p>Isian tersimpan otomatis hanya di browser perangkat ini (tidak dikirim ke server).</p>
+        <p>Isian tersimpan otomatis secara lokal di browser perangkat ini (localStorage) & dapat diekspor ke JSON.</p>
         <p>Aplikasi Form Kuesioner Digital & Engine Validasi SPKRT 2027 &copy; Badan Pusat Statistik (BPS)</p>
     </footer>
 
-    <!-- Floating Autocomplete Container Template -->
     <div id="autocompleteDropdown" class="autocomplete-dropdown-panel" style="display: none;"></div>
 
     <script src="master_komoditas.js"></script>
