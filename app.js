@@ -1,82 +1,134 @@
-// App.js Engine Validasi & Autocomplete Digital SPKRT 2027 (Full Interaktif + Multi-Wilayah + Buku 5 Lengkap + Validasi 131 Kelas)
+// App.js Engine Validasi & Autocomplete Digital SPKRT 2027 (Updated with Strict Block Validation)
 
 let blRows = [];
-let hrRows = [];
 let lkRows = [];
 let validationLogs = [];
-let hrDayFilter = 'ALL';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rp = n => 'Rp ' + (Math.round(n) || 0).toLocaleString('id-ID');
-const STORE_KEY = 'spkrt2027-full-v5';
-const FORM_IDS = [
-    'selectWilayah', 'p_nks', 'p_krt', 'p_art_total', 'p_art_bekerja', 'p_arte_13', 'p_rencana_pindah',
-    's_pendidikan', 's_art_sekolah', 's_status_rumah', 's_nilai_sewa', 's_kesehatan_thn', 's_pajak_thn'
-];
+const STORE_KEY = 'spkrt2027-v2';
+const FORM_IDS = ['p_nks','p_krt','p_art_total','p_art_bekerja','p_arte_13','p_rencana_pindah','s_pendidikan','s_art_sekolah','s_status_rumah','s_nilai_sewa'];
 let loading = true;
 
-function getWilayahObj() {
-    const kode = document.getElementById('selectWilayah')?.value || '6571';
-    return MASTER_WILAYAH_HARGA[kode] || MASTER_WILAYAH_HARGA['0000'];
+// -------------------------------------------------------------
+// ENGINE VALIDASI KETAT KATEGORI BLOK BERBASIS MASTER KOMODITAS
+// -------------------------------------------------------------
+function levenshteinDistance(a, b) {
+    const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+    for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+    for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+    for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost
+            );
+        }
+    }
+    return matrix[a.length][b.length];
 }
 
-function getRangeHarga(kode) {
-    if (!kode) return null;
-    const cleanKode = String(kode).trim();
-    const w = getWilayahObj();
-    const nat = MASTER_WILAYAH_HARGA['0000'].range;
-    const faktor = w.faktor || 1.0;
-
-    // 1. Cek kecocokan spesifik 10-digit atau 7-digit di wilayah terpilih / nasional
-    const exact = w.range[cleanKode] || w.range[cleanKode.slice(0, 7)] || nat[cleanKode] || nat[cleanKode.slice(0, 7)];
-    if (exact) {
-        return { ...exact, level: 'komoditas' };
-    }
-
-    // 2. Fallback ke acuan Kelas COICOP 4-digit (seluruh 131 kelas Buku 5) dengan penyesuaian indeks wilayah
-    const kode4 = cleanKode.slice(0, 4);
-    const kelasBase = (typeof MASTER_KELAS_HARGA_NASIONAL !== 'undefined') ? MASTER_KELAS_HARGA_NASIONAL[kode4] : null;
-    if (kelasBase) {
-        return {
-            nama: kelasBase.nama,
-            satuan: kelasBase.satuan,
-            min: Math.round((kelasBase.min * faktor) / 100) * 100,
-            max: Math.round((kelasBase.max * faktor) / 100) * 100,
-            level: 'kelas'
-        };
-    }
-
-    // 3. Fallback universal jika kode di luar klasifikasi standar
-    return {
-        nama: 'Standar Umum SPKRT',
-        satuan: 'Unit',
-        min: 500,
-        max: Math.round(50000000 * faktor),
-        level: 'umum'
-    };
+function similarityRatio(s1, s2) {
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - levenshteinDistance(longer, shorter)) / longer.length;
 }
 
-function onWilayahChange() {
-    const w = getWilayahObj();
-    const noteEl = document.getElementById('wilayahNote');
-    if (noteEl) {
-        noteEl.innerHTML = `<i class="fa-solid fa-circle-info"></i> <strong>${esc(w.nama)}:</strong> ${esc(w.catatan)}`;
+/**
+ * Validasi apakah komoditas (kode / nama / typo) diizinkan masuk ke kuesioner target ('VPKRT27-BL' atau 'VPKRT27-LK')
+ */
+function validasiBlokKomoditas(targetKuesioner, inputNama, inputKode = null, threshold = 0.78) {
+    const target = targetKuesioner.toUpperCase().trim();
+    const query = (inputNama || '').toLowerCase().trim();
+    const labelBlok = target === 'VPKRT27-LK' ? 'Makanan/Minuman/Rokok (VPKRT27-LK)' : 'Bukan Makanan (VPKRT27-BL)';
+    const labelLawan = target === 'VPKRT27-LK' ? 'Bukan Makanan (VPKRT27-BL)' : 'Makanan/Minuman/Rokok (VPKRT27-LK)';
+
+    // 1. Cek berdasarkan kode jika tersedia
+    if (inputKode) {
+        const byCode = MASTER_KOMODITAS.find(m => String(m.kode) === String(inputKode));
+        if (byCode && byCode.kuesioner.toUpperCase() !== target) {
+            return {
+                valid: false,
+                alasan: 'KODE_SALAH_BLOK',
+                pesan: `Ditolak: Kode ${inputKode} (${byCode.nama}) terdaftar pada blok ${labelLawan}, tidak boleh diinput di ${labelBlok}.`,
+                aksi: `Hapus dari baris ini dan pindahkan pencatatan ke tab ${byCode.kuesioner}.`
+            };
+        }
     }
-    renderBL();
-    renderHR();
-    renderLK();
-    saveState();
+
+    if (!query || query.length < 2) {
+        return { valid: true, alasan: 'KOSONG', pesan: 'Valid' };
+    }
+
+    // 2. Cek exact match atau substring pada Master Buku 5
+    for (const item of MASTER_KOMODITAS) {
+        const namaMaster = item.nama.toLowerCase().trim();
+        const kuesMaster = item.kuesioner.toUpperCase().trim();
+
+        // Cek kemiripan frasa utama (sebelum tanda kurung/garis miring) juga
+        const baseMaster = namaMaster.split(/[/(]/)[0].trim();
+
+        if (
+            namaMaster === query ||
+            (query.length >= 4 && (namaMaster.includes(query) || query.includes(namaMaster))) ||
+            (baseMaster.length >= 4 && (baseMaster === query || query.includes(baseMaster)))
+        ) {
+            if (kuesMaster !== target) {
+                return {
+                    valid: false,
+                    alasan: 'COCOK_MASTER_LAWAN',
+                    pesan: `Ditolak: "${inputNama}" terdeteksi sebagai komoditas "${item.nama}" (${item.kode}) yang masuk blok ${labelLawan}.`,
+                    aksi: `Pindahkan komoditas ini ke tab ${item.kuesioner}.`
+                };
+            }
+            return { valid: true, alasan: 'COCOK_MASTER_SESUAI', pesan: 'Valid' };
+        }
+    }
+
+    // 3. Cek fuzzy matching untuk deteksi typo (salah ketik) komoditas blok lawan
+    let bestMatch = null;
+    let highestScore = 0;
+
+    for (const item of MASTER_KOMODITAS) {
+        const namaMaster = item.nama.toLowerCase().trim();
+        const baseMaster = namaMaster.split(/[/(]/)[0].trim();
+        const scoreFull = similarityRatio(query, namaMaster);
+        const scoreBase = baseMaster.length >= 4 ? similarityRatio(query, baseMaster) : 0;
+        const score = Math.max(scoreFull, scoreBase);
+
+        if (score > highestScore) {
+            highestScore = score;
+            bestMatch = item;
+        }
+    }
+
+    if (bestMatch && highestScore >= threshold) {
+        const kuesMaster = bestMatch.kuesioner.toUpperCase().trim();
+        if (kuesMaster !== target) {
+            return {
+                valid: false,
+                alasan: 'FUZZY_MASTER_LAWAN',
+                pesan: `Ditolak: "${inputNama}" mirip (${Math.round(highestScore * 100)}%) dengan "${bestMatch.nama}" yang masuk blok ${labelLawan}.`,
+                aksi: `Periksa penulisan atau pindahkan ke tab ${bestMatch.kuesioner}.`
+            };
+        }
+    }
+
+    return { valid: true, alasan: 'LOLOS_VALIDASI', pesan: 'Valid' };
 }
 
+// -------------------------------------------------------------
+// STATE MANAGEMENT
+// -------------------------------------------------------------
 function saveState() {
     if (loading) return;
     try {
-        const form = {};
-        FORM_IDS.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) form[id] = el.value;
-        });
-        localStorage.setItem(STORE_KEY, JSON.stringify({ blRows, hrRows, lkRows, form }));
+        const form = {}; FORM_IDS.forEach(id => form[id] = document.getElementById(id).value);
+        localStorage.setItem(STORE_KEY, JSON.stringify({ blRows, lkRows, form }));
     } catch (e) {}
 }
 
@@ -84,171 +136,45 @@ function loadState() {
     try {
         const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
         if (!s) return false;
-        blRows = s.blRows || [];
-        hrRows = s.hrRows || [];
-        lkRows = s.lkRows || [];
-        FORM_IDS.forEach(id => {
-            const el = document.getElementById(id);
-            if (el && s.form && id in s.form) el.value = s.form[id];
-        });
+        blRows = s.blRows || []; lkRows = s.lkRows || [];
+        FORM_IDS.forEach(id => { if (s.form && id in s.form) document.getElementById(id).value = s.form[id]; });
         return true;
     } catch (e) { return false; }
 }
 
 function resetAll() {
-    if (!confirm('Hapus semua isian kuesioner di perangkat ini? Tindakan ini tidak bisa dibatalkan.')) return;
+    if (!confirm('Hapus semua isian di perangkat ini? Tindakan ini tidak bisa dibatalkan.')) return;
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
     location.reload();
 }
 
-function exportJSON() {
-    const form = {};
-    FORM_IDS.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) form[id] = el.value;
-    });
-    const payload = {
-        aplikasi: "SPKRT 2027 Digital Form",
-        waktu_ekspor: new Date().toISOString(),
-        wilayah: getWilayahObj().nama,
-        identitas_dan_tahunan: form,
-        vpkrt27_bl: blRows,
-        vpkrt27_hr: hrRows,
-        vpkrt27_lk: lkRows,
-        log_validasi: validationLogs
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `SPKRT2027_${form.p_nks || 'SAMPEL'}.json`;
-    a.click();
-}
-
 function loadDemo() {
-    if ((blRows.length || hrRows.length || lkRows.length) && !confirm('Isian saat ini akan diganti data contoh (termasuk Gas Alam / Jargas). Lanjutkan?')) return;
-    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-    set('selectWilayah', '6571');
-    set('p_nks', '0012B');
-    set('p_krt', 'Budi Santoso');
-    set('p_art_total', 4);
-    set('p_art_bekerja', 2);
-    set('p_arte_13', 3);
-    set('p_rencana_pindah', 'TIDAK');
-    set('s_pendidikan', 1500000);
-    set('s_art_sekolah', 1);
-    set('s_status_rumah', 'MILIK_SENDIRI');
-    set('s_nilai_sewa', 1200000);
-    set('s_kesehatan_thn', 450000);
-    set('s_pajak_thn', 650000);
-
+    if ((blRows.length || lkRows.length) && !confirm('Isian BL & LK saat ini akan diganti data contoh. Lanjutkan?')) return;
+    const set = (id, v) => document.getElementById(id).value = v;
+    set('p_nks','0012B'); set('p_krt','Contoh KRT'); set('p_art_total',4); set('p_art_bekerja',2); set('p_arte_13',3);
+    set('s_pendidikan',1500000); set('s_art_sekolah',1); set('s_nilai_sewa',800000);
     blRows = [
-        { kode: "0342001001", nama: "GAS BUMI RUMAH TANGGA - RUMAH TANGGA GOLONGAN I / PELANGGAN KECIL (RT-1)", sumber: "BL", metode: "KAS", pasar: "3", cash: 65000, dp: 0 },
-        { kode: "0341001001", nama: "LISTRIK - PASCA BAYAR", sumber: "BL", metode: "KAS", pasar: "5", cash: 320000, dp: 0 },
-        { kode: "0431004001", nama: "MESIN CUCI", sumber: "BL", metode: "KREDIT", pasar: "5", cash: 3600000, dp: 1000000 }
-    ];
-    hrRows = [
-        { hari: "1", sumber: "HR", kode: "0111001057", nama: "BERAS - BULOG MEDIUM", qty: 2, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 32000, pasar: "1" },
-        { hari: "1", sumber: "HRp", kode: "0121001003", nama: "AIR MINERAL - AQUA", qty: 1, satuanLokal: "Botol", konversi: 0.6, satuan: "Liter", nilai: 5000, pasar: "3" },
-        { hari: "2", sumber: "HR", kode: "0112004001", nama: "DAGING AYAM RAS", qty: 1.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 63000, pasar: "2" },
-        { hari: "4", sumber: "HR", kode: "0111001057", nama: "BERAS - BULOG MEDIUM", qty: 1.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 24000, pasar: "1" }
+        { kode:"2202010101", nama:"Tarif Listrik PLN", metode:"KAS", pasar:"5", cash:250000, dp:0 },
+        { kode:"2801010101", nama:"Pembelian Mesin Cuci / Kulkas (Kredit/Tunai)", metode:"KREDIT", pasar:"5", cash:3600000, dp:1000000 }
     ];
     lkRows = [
-        { kode: "0111001057", nama: "BERAS - BULOG MEDIUM", totalHarian: 3.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 56000 },
-        { kode: "0112004001", nama: "DAGING AYAM RAS", totalHarian: 1.5, satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: 63000 }
+        { kode:"1101010101", nama:"Beras Medium", totalHarian:3.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:49000 },
+        { kode:"1102020101", nama:"Daging Ayam Ras", totalHarian:1.5, satuanLokal:"Kg", konversi:1, satuan:"Kg", nilai:57000 }
     ];
-    onWilayahChange();
-    runValidationP();
-    runValidationS();
-    renderHR();
-    renderLK();
+    runValidationP(); runValidationS(); renderBL(); renderLK();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (!loadState()) {
-        blRows = [newBL()];
-        hrRows = [newHR()];
-        lkRows = [newLK()];
-    }
-    if (!blRows.length) blRows = [newBL()];
-    if (!hrRows.length) hrRows = [newHR()];
-    if (!lkRows.length) lkRows = [newLK()];
+    if (!loadState()) { blRows = [newBL()]; lkRows = [newLK()]; }
     loading = false;
-    onWilayahChange();
-    runValidationP();
-    runValidationS();
-    renderHR();
-    renderLK();
-    renderCatalog();
+    runValidationP(); runValidationS(); renderBL(); renderLK(); renderCatalog();
 });
-
-document.addEventListener('keydown', e => {
-    const dropdown = document.getElementById('autocompleteDropdown');
-    if (!dropdown || dropdown.style.display === 'none') return;
-    if (e.key === 'Escape') {
-        hideDropdown();
-        return;
-    }
-    const items = dropdown.querySelectorAll('.autocomplete-item');
-    if (!items.length) return;
-    if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        activeDropdownIdx = (activeDropdownIdx + 1) % items.length;
-        highlightDropdownItem(items);
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        activeDropdownIdx = (activeDropdownIdx - 1 + items.length) % items.length;
-        highlightDropdownItem(items);
-    } else if (e.key === 'Enter' && activeDropdownIdx >= 0 && items[activeDropdownIdx]) {
-        e.preventDefault();
-        items[activeDropdownIdx].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    }
-});
-
-// Perbaikan utama scroll: JANGAN tutup dropdown jika yang di-scroll adalah panel dropdown itu sendiri!
-window.addEventListener('scroll', (e) => {
-    const dropdown = document.getElementById('autocompleteDropdown');
-    if (!dropdown || dropdown.style.display === 'none') return;
-    if (e.target === dropdown || dropdown.contains(e.target)) return;
-    repositionDropdown();
-}, true);
-
-window.addEventListener('resize', () => {
-    const dropdown = document.getElementById('autocompleteDropdown');
-    if (!dropdown || dropdown.style.display === 'none') return;
-    repositionDropdown();
-});
-
-function hideDropdown() {
-    const d = document.getElementById('autocompleteDropdown');
-    if (d) d.style.display = 'none';
-    activeDropdownIdx = -1;
-}
-
-function repositionDropdown() {
-    const dropdown = document.getElementById('autocompleteDropdown');
-    if (!dropdown || !activeInputTarget || dropdown.style.display === 'none') return;
-    const rect = activeInputTarget.getBoundingClientRect();
-    // Tutup hanya jika input target sudah keluar dari viewport vertikal
-    if (rect.bottom < 0 || rect.top > window.innerHeight) {
-        hideDropdown();
-        return;
-    }
-    dropdown.style.top = `${rect.bottom + window.scrollY}px`;
-    dropdown.style.left = `${rect.left + window.scrollX}px`;
-    dropdown.style.width = `${Math.max(rect.width, 400)}px`;
-}
-
-function highlightDropdownItem(items) {
-    items.forEach((el, idx) => {
-        el.classList.toggle('active-opt', idx === activeDropdownIdx);
-        if (idx === activeDropdownIdx) {
-            el.scrollIntoView({ block: 'nearest' });
-        }
-    });
-}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideDropdown(); });
+window.addEventListener('scroll', () => hideDropdown(), true);
+window.addEventListener('resize', () => hideDropdown());
+function hideDropdown() { const d = document.getElementById('autocompleteDropdown'); if (d) d.style.display = 'none'; }
 
 function switchTab(tabId) {
-    hideDropdown();
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
 
@@ -273,13 +199,13 @@ function runValidationP() {
     const resDiv = document.getElementById('resultEligibilityP');
     if (document.getElementById('p_art_total').value === '') {
         resDiv.className = "alert alert-info mt-3";
-        resDiv.innerHTML = `<i class="fa-solid fa-circle-info"></i> Isi jumlah ART untuk melihat hasil eligibilitas sampel rumah tangga.`;
+        resDiv.innerHTML = `<i class="fa-solid fa-circle-info"></i> Isi jumlah ART untuk melihat hasil eligibilitas.`;
         updateValidationDashboard();
         return;
     }
     const dataWarn = [];
     if (artBekerja > artTotal) dataWarn.push("Jumlah ART bekerja melebihi jumlah ART total.");
-    if (arte13 > artTotal) dataWarn.push("Jumlah ARTE >= 13 tahun melebihi jumlah ART total.");
+    if (arte13 > artTotal) dataWarn.push("Jumlah ARTE ≥ 13 tahun melebihi jumlah ART total.");
 
     if (artTotal < 2 || artTotal > 10) {
         isEligible = false;
@@ -309,159 +235,152 @@ function runValidationP() {
             <p><em>Prosedur PPL: Ganti sampel menggunakan Form FPPS ke BPS Kabupaten/Kota.</em></p>
         `;
     }
-    updateTotalsLK();
+    updateValidationDashboard();
 }
 
 // -------------------------------------------------------------
-// AUTOCOMPLETE ENGINE MASTER BUKU 5 (40.998 ITEM)
+// AUTOCOMPLETE ENGINE MASTER BUKU 5 (TERFILTER KETAT PER BLOK)
 // -------------------------------------------------------------
 let activeInputTarget = null;
 let activeRowIndex = null;
 let activeTargetType = null;
-let activeDropdownIdx = -1;
-
-function searchMaster(query, limit = 50) {
-    const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    if (!tokens.length) return [];
-    const results = [];
-    for (let i = 0; i < MASTER_KOMODITAS.length; i++) {
-        const item = MASTER_KOMODITAS[i];
-        let match = true;
-        for (let t = 0; t < tokens.length; t++) {
-            if (!item._search.includes(tokens[t])) {
-                match = false;
-                break;
-            }
-        }
-        if (match) {
-            results.push(item);
-            if (results.length >= limit) break;
-        }
-    }
-    return results;
-}
 
 function showCommoditySearch(event, inputElem, type, rowIndex) {
     activeInputTarget = inputElem;
     activeRowIndex = rowIndex;
     activeTargetType = type;
-    activeDropdownIdx = -1;
 
-    const listRef = type === 'BL' ? blRows : (type === 'HR' ? hrRows : lkRows);
-    const row = listRef[rowIndex];
-    if (row && event && event.type === 'input') {
+    const targetKuesioner = type === 'BL' ? 'VPKRT27-BL' : 'VPKRT27-LK';
+    const row = (type === 'BL' ? blRows : lkRows)[rowIndex];
+    if (row) {
         row.nama = inputElem.value;
         row.kode = '';
-        const k = inputElem.closest('tr')?.querySelector('.c-kode');
+        const tr = inputElem.closest('tr');
+        const k = tr.querySelector('.c-kode');
         if (k) k.value = '';
+
+        // Jalankan pengecekan validasi blok real-time saat mengetik manual
         if (type === 'BL') {
             const [cls, txt] = calcBL(row);
-            const st = inputElem.closest('tr')?.querySelector('.c-status');
+            const st = tr.querySelector('.c-status');
             if (st) st.innerHTML = `<span class="badge ${cls}">${txt}</span>`;
+            updateTotalsBL();
+        } else {
+            const c = calcLK(row);
+            const st = tr.querySelector('.c-status');
+            if (st) st.innerHTML = lkStatusHTML(c, row);
+            updateTotalsLK();
         }
-        updateValidationDashboard();
     }
 
-    const query = inputElem.value.trim();
+    const query = inputElem.value.toLowerCase().trim();
     const dropdown = document.getElementById('autocompleteDropdown');
 
     if (query.length === 0) {
-        hideDropdown();
+        dropdown.style.display = 'none';
         return;
     }
 
-    const filtered = searchMaster(query, 50);
+    // Filter ketat: HANYA tampilkan komoditas yang sesuai dengan blok kuesioner aktif
+    const filtered = MASTER_KOMODITAS.filter(item =>
+        item.kuesioner === targetKuesioner &&
+        (
+            item.nama.toLowerCase().includes(query) ||
+            item.kode.includes(query) ||
+            item.kualitas.toLowerCase().includes(query)
+        )
+    ).slice(0, 8);
+
+    const rect = inputElem.getBoundingClientRect();
+    dropdown.style.top = `${rect.bottom + window.scrollY}px`;
+    dropdown.style.left = `${rect.left + window.scrollX}px`;
+    dropdown.style.width = `${Math.max(rect.width, 320)}px`;
+
     if (filtered.length === 0) {
-        dropdown.style.display = 'block';
-        repositionDropdown();
-        dropdown.innerHTML = `<div class="autocomplete-item" style="color:#b45309;cursor:default;">Tidak ditemukan komoditas untuk kata kunci "<strong>${esc(query)}</strong>".</div>`;
+        // Cek apakah query tersebut sebenarnya milik blok lawan untuk memberi petunjuk langsung
+        const cekLawan = validasiBlokKomoditas(targetKuesioner, query, null);
+        if (!cekLawan.valid) {
+            dropdown.style.display = 'block';
+            dropdown.innerHTML = `
+                <div class="autocomplete-item" style="background:#fff5f5; border-left:4px solid #dc3545; cursor:not-allowed;">
+                    <div class="autocomplete-title" style="color:#dc3545;"><i class="fa-solid fa-ban"></i> Salah Blok Kuesioner!</div>
+                    <div class="autocomplete-sub" style="color:#7f1d1d;">${esc(cekLawan.pesan)}</div>
+                </div>
+            `;
+        } else {
+            dropdown.style.display = 'none';
+        }
         return;
     }
 
     dropdown.style.display = 'block';
-    repositionDropdown();
-
-    const headerNote = `<div style="padding:0.4rem 0.9rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:0.75rem;color:#475569;position:sticky;top:0;">Menampilkan ${filtered.length}${filtered.length === 50 ? '+' : ''} hasil cocok (gulir ke bawah untuk melihat pilihan lain)</div>`;
-    dropdown.innerHTML = headerNote + filtered.map(item => `
-        <div class="autocomplete-item" onmousedown="event.preventDefault(); selectCommodityById(${item.id})">
-            <div class="autocomplete-title">${esc(item.nama)} <span style="font-weight:400;color:#475569;">(${esc(item.kualitas)})</span></div>
+    dropdown.innerHTML = filtered.map(item => `
+        <div class="autocomplete-item" onclick="selectCommodity('${item.kode}')">
+            <div class="autocomplete-title">${esc(item.nama)}</div>
             <div class="autocomplete-sub">
                 <span>Kode: ${item.kode} | Satuan: ${esc(item.satuan)}</span>
                 <span class="badge badge-info">${item.kuesioner}</span>
             </div>
         </div>
     `).join('');
-    dropdown.scrollTop = 0;
 }
 
-function selectCommodityById(id) {
-    const item = MASTER_KOMODITAS[id];
+function selectCommodity(kode) {
+    const item = MASTER_KOMODITAS.find(k => k.kode === kode);
     if (!item) return;
-    const labelLengkap = item.kualitas && item.kualitas !== 'GABUNGAN' && item.kualitas !== '…'
-        ? `${item.nama} - ${item.kualitas}`
-        : item.nama;
+
+    const targetKuesioner = activeTargetType === 'BL' ? 'VPKRT27-BL' : 'VPKRT27-LK';
+    const cek = validasiBlokKomoditas(targetKuesioner, item.nama, item.kode);
+    if (!cek.valid) {
+        alert(cek.pesan);
+        hideDropdown();
+        return;
+    }
 
     if (activeTargetType === 'BL') {
         blRows[activeRowIndex].kode = item.kode;
-        blRows[activeRowIndex].nama = labelLengkap;
+        blRows[activeRowIndex].nama = item.nama;
         renderBL();
-    } else if (activeTargetType === 'HR') {
-        hrRows[activeRowIndex].kode = item.kode;
-        hrRows[activeRowIndex].nama = labelLengkap;
-        hrRows[activeRowIndex].satuan = item.satuan;
-        hrRows[activeRowIndex].satuanLokal = item.satuan;
-        renderHR();
     } else if (activeTargetType === 'LK') {
         lkRows[activeRowIndex].kode = item.kode;
-        lkRows[activeRowIndex].nama = labelLengkap;
+        lkRows[activeRowIndex].nama = item.nama;
         lkRows[activeRowIndex].satuan = item.satuan;
-        lkRows[activeRowIndex].satuanLokal = item.satuan;
         renderLK();
     }
     hideDropdown();
 }
 
-document.addEventListener('mousedown', (e) => {
+document.addEventListener('click', (e) => {
     if (!e.target.closest('#autocompleteDropdown') && !e.target.closest('input')) {
-        hideDropdown();
+        document.getElementById('autocompleteDropdown').style.display = 'none';
     }
 });
 
 // -------------------------------------------------------------
-// TAB 2: VPKRT27-BL ENGINE
+// TAB 2: VPKRT27-BL ENGINE (BUKAN MAKANAN)
 // -------------------------------------------------------------
-const newBL = () => ({ kode: "", nama: "", sumber: "BL", metode: "KAS", pasar: "1", cash: "", dp: "" });
-const newHR = () => ({ hari: "1", sumber: "HR", kode: "", nama: "", qty: "", satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: "", pasar: "1" });
+const newBL = () => ({ kode: "", nama: "", metode: "KAS", pasar: "1", cash: "", dp: "" });
 const newLK = () => ({ kode: "", nama: "", totalHarian: "", satuanLokal: "Kg", konversi: 1, satuan: "Kg", nilai: "" });
-const sel = (v, cur) => String(v) === String(cur) ? 'selected' : '';
+const sel = (v, cur) => v === cur ? 'selected' : '';
 
 function addRowBL() { blRows.push(newBL()); renderBL(); }
-function removeRowBL(idx) { blRows.splice(idx, 1); if (!blRows.length) blRows.push(newBL()); renderBL(); }
+function removeRowBL(idx) { blRows.splice(idx, 1); renderBL(); }
 
 function calcBL(row) {
-    const rawCash = row.cash;
-    const cash = parseFloat(rawCash) || 0;
-    const dp = parseFloat(row.dp) || 0;
+    const cash = parseFloat(row.cash) || 0, dp = parseFloat(row.dp) || 0;
+    if (!row.nama && !cash && !dp) return ['badge-info', 'Baris kosong', null];
 
-    if (!row.nama && rawCash === '' && row.dp === '') return ['badge-info', 'Baris kosong'];
-    if (!row.kode) return ['badge-warning', 'Pilih komoditas dari daftar'];
-    if (cash < 0 || dp < 0) return ['badge-danger', 'Nilai tidak boleh negatif'];
-    if (row.metode === 'KREDIT' && !dp) return ['badge-warning', 'Kredit: DP/cicilan kosong'];
-    if (row.metode === 'KAS' && dp > 0) return ['badge-warning', 'Tunai tapi ada DP/cicilan'];
-    if (rawCash === '' || cash <= 0) return ['badge-warning', 'Nilai tunai wajib > Rp 0'];
-
-    const range = getRangeHarga(row.kode);
-    if (range) {
-        const labelAcuan = range.level === 'komoditas' ? 'range wilayah' : `kelas ${range.nama}`;
-        if (cash < range.min) {
-            return ['badge-danger', `Di bawah ${labelAcuan} (min ${rp(range.min)})`];
-        }
-        if (cash > range.max) {
-            return ['badge-warning', `Di atas ${labelAcuan} (maks ${rp(range.max)})`];
-        }
-        return ['badge-success', `Valid & Wajar (${rp(range.min)} - ${rp(range.max)})`];
+    // Validasi ketat kategori blok: VPKRT27-BL tidak boleh diisi komoditas makanan/rokok
+    const cekBlok = validasiBlokKomoditas('VPKRT27-BL', row.nama, row.kode);
+    if (!cekBlok.valid) {
+        return ['badge-danger', 'Salah Blok (Makanan/Rokok)', cekBlok];
     }
-    return ['badge-success', 'Valid & Wajar'];
+
+    if (!row.kode) return ['badge-warning', 'Pilih komoditas dari daftar', null];
+    if (row.metode === 'KREDIT' && !dp) return ['badge-warning', 'Kredit: DP/cicilan kosong', null];
+    if (row.metode === 'KAS' && dp) return ['badge-warning', 'Tunai tapi ada DP/cicilan', null];
+    if (!cash) return ['badge-warning', 'Harga belum diisi', null];
+    return ['badge-success', 'Valid', null];
 }
 
 function setBL(idx, field, val) {
@@ -485,206 +404,66 @@ function renderBL() {
         const [cls, txt] = calcBL(row);
         return `<tr data-i="${idx}">
             <td>${idx + 1}</td>
-            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas (misal: Gas Alam, Listrik)..." autocomplete="off" onfocus="showCommoditySearch(event, this, 'BL', ${idx})" oninput="showCommoditySearch(event, this, 'BL', ${idx})"></td>
-            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode"></td>
-            <td><select onchange="setBL(${idx},'sumber',this.value)">
-                <option value="BL" ${sel('BL', row.sumber)}>BL (Utama RT)</option>
-                <option value="BLp" ${sel('BLp', row.sumber)}>BLp (ARTE Mandiri)</option>
-            </select></td>
-            <td><select onchange="setBL(${idx},'metode',this.value)">
-                <option value="KAS" ${sel('KAS', row.metode)}>Beli Tunai (Kas)</option>
-                <option value="KREDIT" ${sel('KREDIT', row.metode)}>Kredit / Cicilan</option>
-                <option value="PRODUKSI" ${sel('PRODUKSI', row.metode)}>Produksi Sendiri/Pemberian</option>
-            </select></td>
+            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas bukan makanan..." autocomplete="off" aria-label="Komoditas baris ${idx + 1}" oninput="showCommoditySearch(event, this, 'BL', ${idx})"></td>
+            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode" aria-label="Kode"></td>
+            <td><select onchange="setBL(${idx},'metode',this.value)"><option value="KAS" ${sel('KAS', row.metode)}>Beli Tunai (Kas)</option><option value="KREDIT" ${sel('KREDIT', row.metode)}>Kredit / Cicilan</option></select></td>
             <td><select onchange="setBL(${idx},'pasar',this.value)">
                 <option value="1" ${sel('1', row.pasar)}>1. Pasar Tradisional</option>
-                <option value="2" ${sel('2', row.pasar)}>2. Supermarket/Minimarket</option>
-                <option value="3" ${sel('3', row.pasar)}>3. Toko Khusus / PLN / PGN</option>
-                <option value="4" ${sel('4', row.pasar)}>4. Jasa / Perorangan</option>
-                <option value="5" ${sel('5', row.pasar)}>5. Online / Marketplace</option>
-            </select></td>
+                <option value="2" ${sel('2', row.pasar)}>2. Supermarket</option>
+                <option value="3" ${sel('3', row.pasar)}>3. Toko Khusus</option>
+                <option value="5" ${sel('5', row.pasar)}>5. Online/Marketplace</option></select></td>
             <td><input type="number" min="0" inputmode="numeric" value="${esc(row.cash)}" oninput="setBL(${idx},'cash',this.value)"></td>
             <td><input type="number" min="0" inputmode="numeric" value="${esc(row.dp)}" oninput="setBL(${idx},'dp',this.value)"></td>
             <td class="c-status"><span class="badge ${cls}">${txt}</span></td>
-            <td><button class="btn btn-danger btn-sm" onclick="removeRowBL(${idx})" title="Hapus baris"><i class="fa-solid fa-trash"></i></button></td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeRowBL(${idx})" aria-label="Hapus baris ${idx + 1}"><i class="fa-solid fa-trash"></i></button></td>
         </tr>`;
     }).join('');
     updateTotalsBL();
 }
 
 // -------------------------------------------------------------
-// TAB 3: VPKRT27-HR & HRp ENGINE (FORM ISIAN AKTIF 7 HARI)
-// -------------------------------------------------------------
-function setFilterHariHR(hari, btn) {
-    hrDayFilter = hari;
-    document.querySelectorAll('#hrDayFilterBar .day-pill').forEach(el => el.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    renderHR();
-}
-
-function addRowHR() {
-    const row = newHR();
-    if (hrDayFilter !== 'ALL') row.hari = hrDayFilter;
-    hrRows.push(row);
-    renderHR();
-}
-
-function removeRowHR(idx) {
-    hrRows.splice(idx, 1);
-    if (!hrRows.length) hrRows.push(newHR());
-    renderHR();
-}
-
-function calcHR(row) {
-    const qty = parseFloat(row.qty) || 0;
-    const konv = parseFloat(row.konversi) || 1;
-    const stdQty = qty * konv;
-    const nilai = parseFloat(row.nilai) || 0;
-    const issues = [];
-    if (!row.kode && (row.nama || qty > 0 || nilai > 0)) {
-        issues.push({ lv: 'warning', msg: 'Komoditas harian belum dipilih dari daftar master Buku 5.' });
-    }
-    if (row.kode && stdQty > 0 && nilai > 0) {
-        const harga = Math.round(nilai / stdQty);
-        const range = getRangeHarga(row.kode);
-        if (range) {
-            if (harga < range.min) issues.push({ lv: 'danger', msg: `Harga satuan harian ${rp(harga)} di bawah batas wajar (${rp(range.min)} - ${rp(range.max)}).` });
-            else if (harga > range.max) issues.push({ lv: 'warning', msg: `Harga satuan harian ${rp(harga)} di atas batas wajar (${rp(range.min)} - ${rp(range.max)}).` });
-        }
-    }
-    return issues;
-}
-
-function setHR(idx, field, val) {
-    hrRows[idx][field] = val;
-    updateTotalsHR();
-}
-
-function updateTotalsHR() {
-    const totHR = hrRows.filter(r => r.sumber === 'HR').reduce((s, r) => s + (parseFloat(r.nilai) || 0), 0);
-    const totHRp = hrRows.filter(r => r.sumber === 'HRp').reduce((s, r) => s + (parseFloat(r.nilai) || 0), 0);
-    document.getElementById('totalHRUtama').innerText = rp(totHR);
-    document.getElementById('totalHRpARTE').innerText = rp(totHRp);
-    document.getElementById('totalHRGabungan').innerText = rp(totHR + totHRp);
-    updateValidationDashboard();
-}
-
-function renderHR() {
-    const tbody = document.getElementById('tbodyHR');
-    const visible = hrRows.map((r, idx) => ({ r, idx })).filter(x => hrDayFilter === 'ALL' || String(x.r.hari) === String(hrDayFilter));
-    tbody.innerHTML = visible.map(({ r, idx }, visNo) => `
-        <tr data-i="${idx}">
-            <td>${visNo + 1}</td>
-            <td><select onchange="setHR(${idx},'hari',this.value)">
-                ${[1,2,3,4,5,6,7].map(d => `<option value="${d}" ${sel(d, r.hari)}>Hari ${d}</option>`).join('')}
-            </select></td>
-            <td><select onchange="setHR(${idx},'sumber',this.value)">
-                <option value="HR" ${sel('HR', r.sumber)}>HR Utama</option>
-                <option value="HRp" ${sel('HRp', r.sumber)}>HRp (ARTE)</option>
-            </select></td>
-            <td><input type="text" value="${esc(r.nama)}" placeholder="Ketik komoditas harian..." autocomplete="off" onfocus="showCommoditySearch(event, this, 'HR', ${idx})" oninput="showCommoditySearch(event, this, 'HR', ${idx})"></td>
-            <td><input type="text" value="${esc(r.kode)}" readonly tabindex="-1" class="bg-gray c-kode"></td>
-            <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(r.qty)}" oninput="setHR(${idx},'qty',this.value)"></td>
-            <td><input type="text" value="${esc(r.satuanLokal)}" oninput="setHR(${idx},'satuanLokal',this.value)"></td>
-            <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(r.konversi)}" oninput="setHR(${idx},'konversi',this.value)"></td>
-            <td><input type="number" min="0" inputmode="numeric" value="${esc(r.nilai)}" oninput="setHR(${idx},'nilai',this.value)"></td>
-            <td><select onchange="setHR(${idx},'pasar',this.value)">
-                <option value="1" ${sel('1', r.pasar)}>1. Pasar Tradisional</option>
-                <option value="2" ${sel('2', r.pasar)}>2. Supermarket/Minimarket</option>
-                <option value="3" ${sel('3', r.pasar)}>3. Warung / Kantin</option>
-                <option value="4" ${sel('4', r.pasar)}>4. Pedagang Keliling</option>
-                <option value="5" ${sel('5', r.pasar)}>5. Online / GoFood / Grab</option>
-            </select></td>
-            <td><button class="btn btn-danger btn-sm" onclick="removeRowHR(${idx})" title="Hapus baris"><i class="fa-solid fa-trash"></i></button></td>
-        </tr>
-    `).join('');
-    updateTotalsHR();
-}
-
-function rekapHRkeLK() {
-    const validHR = hrRows.filter(r => r.kode && ((parseFloat(r.qty) || 0) > 0 || (parseFloat(r.nilai) || 0) > 0));
-    if (!validHR.length) {
-        alert('Belum ada isian harian HR/HRp yang memiliki kode komoditas & kuantitas/nilai untuk direkap.');
-        return;
-    }
-    const grouped = {};
-    validHR.forEach(r => {
-        if (!grouped[r.kode]) {
-            grouped[r.kode] = {
-                kode: r.kode,
-                nama: r.nama,
-                totalHarian: 0,
-                satuanLokal: r.satuan || r.satuanLokal || 'Kg',
-                konversi: 1,
-                satuan: r.satuan || 'Kg',
-                nilai: 0
-            };
-        }
-        const stdQty = (parseFloat(r.qty) || 0) * (parseFloat(r.konversi) || 1);
-        grouped[r.kode].totalHarian += stdQty;
-        grouped[r.kode].nilai += (parseFloat(r.nilai) || 0);
-    });
-    lkRows = Object.values(grouped).map(g => ({
-        ...g,
-        totalHarian: Number(g.totalHarian.toFixed(3))
-    }));
-    renderLK();
-    switchTab('vpkrt-lk');
-}
-
-// -------------------------------------------------------------
 // TAB 4: VPKRT27-LK ENGINE (MAKANAN)
 // -------------------------------------------------------------
 function addRowLK() { lkRows.push(newLK()); renderLK(); }
-function removeRowLK(idx) { lkRows.splice(idx, 1); if (!lkRows.length) lkRows.push(newLK()); renderLK(); }
+function removeRowLK(idx) { lkRows.splice(idx, 1); renderLK(); }
 
 function calcLK(row) {
-    const rawQty = parseFloat(row.totalHarian) || 0;
-    const konversi = parseFloat(row.konversi) || 0;
-    const stdQty = rawQty * konversi;
+    const stdQty = (parseFloat(row.totalHarian) || 0) * (parseFloat(row.konversi) || 1);
     const nilai = parseFloat(row.nilai) || 0;
     const harga = stdQty > 0 ? Math.round(nilai / stdQty) : 0;
     const artTotal = parseInt(document.getElementById('p_art_total').value) || 0;
-    const range = getRangeHarga(row.kode);
-    const master = row.kode ? MASTER_KOMODITAS.find(k => k.kode === row.kode) : null;
+    const range = MASTER_RANGE_HARGA.range[row.kode];
+    const master = MASTER_KOMODITAS.find(k => k.kode === row.kode);
     const issues = [];
 
-    if (row.kode) {
-        if (rawQty > 0 && konversi <= 0) {
-            issues.push({ lv: 'danger', t: 'Konversi tidak valid', msg: 'Angka konversi satuan harus lebih besar dari 0.', aksi: 'Periksa tabel konversi satuan lokal ke satuan standar.' });
-        }
-        if (stdQty > 0 && nilai <= 0) {
-            issues.push({ lv: 'danger', t: 'Nilai Rp kosong', msg: 'Kuantitas terisi namun Nilai (Rp) masih 0.', aksi: 'Isi total nilai pengeluaran selama 7 hari.' });
-        }
-        if (nilai > 0 && stdQty <= 0) {
-            issues.push({ lv: 'danger', t: 'Kuantitas kosong', msg: 'Nilai (Rp) terisi namun Kuantitas masih 0.', aksi: 'Isi total kuantitas konsumsi selama 7 hari.' });
-        }
+    // Validasi ketat kategori blok: VPKRT27-LK tidak boleh diisi komoditas bukan makanan
+    const cekBlok = validasiBlokKomoditas('VPKRT27-LK', row.nama, row.kode);
+    if (!cekBlok.valid) {
+        issues.push({
+            lv: 'danger',
+            levelLog: 'ERROR',
+            t: 'Salah Blok (Bukan Makanan)',
+            msg: cekBlok.pesan,
+            aksi: cekBlok.aksi
+        });
+        return { stdQty, nilai, harga, issues, salahBlok: true };
     }
 
-    if (range && stdQty > 0 && nilai > 0) {
-        const labelAcuan = range.level === 'komoditas' ? 'range wajar wilayah' : `kelas ${range.nama}`;
-        if (harga < range.min) {
-            issues.push({ lv: 'danger', t: `Terlalu murah (min ${rp(range.min)})`, msg: `Harga implisit ${rp(harga)} di bawah ${labelAcuan} (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
-        } else if (harga > range.max) {
-            issues.push({ lv: 'warning', t: `Terlalu mahal (maks ${rp(range.max)})`, msg: `Harga implisit ${rp(harga)} di atas ${labelAcuan} (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
-        }
+    if (range && stdQty > 0) {
+        if (harga < range.min) issues.push({ lv: 'danger', levelLog: 'WARNING', t: `Terlalu murah (min ${rp(range.min)})`, msg: `Harga implisit ${rp(harga)} di bawah range wajar (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
+        else if (harga > range.max) issues.push({ lv: 'warning', levelLog: 'WARNING', t: `Terlalu mahal (maks ${rp(range.max)})`, msg: `Harga implisit ${rp(harga)} di atas range wajar (${rp(range.min)} - ${rp(range.max)}).`, aksi: "PML re-cek kuantitas harian atau angka konversi satuan." });
     }
     if (master && artTotal > 0 && stdQty / artTotal > master.batas_max_perkapita) {
         const pk = (stdQty / artTotal).toFixed(2);
-        issues.push({ lv: 'warning', t: `Per kapita ${pk} > batas ${master.batas_max_perkapita} ${master.satuan}`, msg: `Konsumsi per kapita ${pk} ${master.satuan} melebihi batas ${master.batas_max_perkapita} ${master.satuan}.`, aksi: "Konfirmasi ulang jumlah konsumsi dan jumlah ART ke responden." });
+        issues.push({ lv: 'warning', levelLog: 'WARNING', t: `Per kapita ${pk} > batas ${master.batas_max_perkapita} ${master.satuan}`, msg: `Konsumsi per kapita ${pk} ${master.satuan} melebihi batas ${master.batas_max_perkapita} ${master.satuan}.`, aksi: "Konfirmasi ulang jumlah konsumsi dan jumlah ART ke responden." });
     }
-    return { stdQty, nilai, harga, range, issues };
+    return { stdQty, nilai, harga, issues, salahBlok: false };
 }
 
 function lkStatusHTML(c, row) {
-    if (!row.kode && (row.nama || c.nilai || c.stdQty)) return '<span class="badge badge-warning">Pilih komoditas dari daftar</span>';
-    if (!c.issues.length) {
-        if (c.stdQty > 0 && c.nilai > 0) {
-            const rangeInfo = c.range ? ` (${rp(c.range.min)} - ${rp(c.range.max)})` : '';
-            return `<span class="badge badge-success">Wajar${rangeInfo}</span>`;
-        }
-        return '<span class="badge badge-info">Belum lengkap</span>';
-    }
+    if (c.salahBlok) return c.issues.map(i => `<span class="badge badge-danger">${i.t}</span>`).join(' ');
+    if (!row.kode && (row.nama || c.nilai)) return '<span class="badge badge-warning">Pilih komoditas dari daftar</span>';
+    if (!c.issues.length) return c.stdQty > 0 ? '<span class="badge badge-success">Wajar</span>' : '<span class="badge badge-info">Belum lengkap</span>';
     return c.issues.map(i => `<span class="badge badge-${i.lv}">${i.t}</span>`).join(' ');
 }
 
@@ -713,8 +492,8 @@ function renderLK() {
         const c = calcLK(row);
         return `<tr data-i="${idx}">
             <td>${idx + 1}</td>
-            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas makanan..." autocomplete="off" onfocus="showCommoditySearch(event, this, 'LK', ${idx})" oninput="showCommoditySearch(event, this, 'LK', ${idx})"></td>
-            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode"></td>
+            <td><input type="text" value="${esc(row.nama)}" placeholder="Ketik komoditas makanan..." autocomplete="off" aria-label="Komoditas baris ${idx + 1}" oninput="showCommoditySearch(event, this, 'LK', ${idx})"></td>
+            <td><input type="text" value="${esc(row.kode)}" readonly tabindex="-1" class="bg-gray c-kode" aria-label="Kode"></td>
             <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(row.totalHarian)}" oninput="setLK(${idx},'totalHarian',this.value)"></td>
             <td><input type="text" value="${esc(row.satuanLokal)}" oninput="setLK(${idx},'satuanLokal',this.value)"></td>
             <td><input type="number" min="0" step="any" inputmode="decimal" value="${esc(row.konversi)}" oninput="setLK(${idx},'konversi',this.value)"></td>
@@ -722,7 +501,7 @@ function renderLK() {
             <td><input type="number" min="0" inputmode="numeric" value="${esc(row.nilai)}" oninput="setLK(${idx},'nilai',this.value)"></td>
             <td class="c-harga">${rp(c.harga)}</td>
             <td class="c-status">${lkStatusHTML(c, row)}</td>
-            <td><button class="btn btn-danger btn-sm" onclick="removeRowLK(${idx})" title="Hapus baris"><i class="fa-solid fa-trash"></i></button></td>
+            <td><button class="btn btn-danger btn-sm" onclick="removeRowLK(${idx})" aria-label="Hapus baris ${idx + 1}"><i class="fa-solid fa-trash"></i></button></td>
         </tr>`;
     }).join('');
     updateTotalsLK();
@@ -734,22 +513,12 @@ function renderLK() {
 function runValidationS() {
     const pend = parseInt(document.getElementById('s_pendidikan').value) || 0;
     const artSekolah = parseInt(document.getElementById('s_art_sekolah').value) || 0;
-    const statusRumah = document.getElementById('s_status_rumah').value;
-    const nilaiSewa = parseInt(document.getElementById('s_nilai_sewa').value) || 0;
     const resDiv = document.getElementById('resultValidationS');
 
-    const warnings = [];
     if (artSekolah > 0 && pend === 0) {
-        warnings.push(`Terdapat ${artSekolah} ART bersekolah tetapi pengeluaran pendidikan Rp 0 (wajib catatan beasiswa/gratis).`);
-    }
-    if ((statusRumah === 'MILIK_SENDIRI' || statusRumah === 'BEBAS_SEWA') && nilaiSewa === 0 && document.getElementById('s_nilai_sewa').value !== '') {
-        warnings.push("Status rumah Milik Sendiri / Bebas Sewa wajib diisi perkiraan nilai sewa per bulan (> Rp 0).");
-    }
-
-    if (warnings.length) {
         resDiv.className = "alert alert-warning";
-        resDiv.innerHTML = `<h4><i class="fa-solid fa-triangle-exclamation"></i> PERINGATAN KONSISTENSI VPKRT27-S (BUKU 4)</h4>
-        <ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul>`;
+        resDiv.innerHTML = `<h4><i class="fa-solid fa-triangle-exclamation"></i> PERINGATAN KONSISTENSI BUKU 4</h4>
+        <p>Terdapat ${artSekolah} ART bersekolah tetapi pengeluaran pendidikan Rp 0. PPL/PML wajib memberikan catatan pendukung jika beasiswa penuh.</p>`;
     } else {
         resDiv.className = "alert alert-success";
         resDiv.innerHTML = `<h4><i class="fa-solid fa-circle-check"></i> ISIAN VPKRT27-S KONSISTEN LOGIS</h4>`;
@@ -763,70 +532,32 @@ function runValidationS() {
 function updateValidationDashboard() {
     validationLogs = [];
 
+    // Check P
     const artTotal = parseInt(document.getElementById('p_art_total').value) || 0;
     if (document.getElementById('p_art_total').value !== '' && (artTotal < 2 || artTotal > 10)) {
         validationLogs.push({ kuesioner: "VPKRT27-P", rincian: "Jumlah ART Total", level: "ERROR", pesan: `Jumlah ART (${artTotal}) di luar batas 2-10 orang.`, aksi: "Konfirmasi ulang keberadaan ART atau lakukan penggantian sampel." });
     }
 
+    // Check BL (validasi blok komoditas bukan makanan)
     blRows.forEach(row => {
-        const cash = parseFloat(row.cash) || 0;
-        const dp = parseFloat(row.dp) || 0;
-        if (!row.kode && (row.nama || cash > 0 || dp > 0)) {
+        const [, , cekBlok] = calcBL(row);
+        if (cekBlok && !cekBlok.valid) {
             validationLogs.push({
                 kuesioner: "VPKRT27-BL",
-                rincian: row.nama || "(Tanpa Nama)",
-                level: "WARNING",
-                pesan: "Komoditas belum dipilih dari daftar master Buku 5 sehingga kode 10-digit kosong.",
-                aksi: "Ketik nama barang dan klik pilihan dari dropdown autocomplete."
-            });
-            return;
-        }
-        if (row.kode && cash <= 0 && (row.nama || row.cash !== '')) {
-            validationLogs.push({
-                kuesioner: "VPKRT27-BL",
-                rincian: row.nama || row.kode,
+                rincian: row.nama || "(Kosong)",
                 level: "ERROR",
-                pesan: "Nilai tunai/pembelian bukan makanan masih kosong atau Rp 0.",
-                aksi: "Isi nilai pengeluaran dengan benar (> Rp 0)."
-            });
-        }
-        const range = getRangeHarga(row.kode);
-        if (range && cash > 0 && (cash < range.min || cash > range.max)) {
-            const labelAcuan = range.level === 'komoditas' ? `wilayah ${getWilayahObj().nama}` : `kelas ${range.nama}`;
-            validationLogs.push({
-                kuesioner: "VPKRT27-BL",
-                rincian: row.nama || row.kode,
-                level: cash < range.min ? "ERROR" : "WARNING",
-                pesan: `Nilai ${rp(cash)} di luar acuan wajar ${labelAcuan} (${rp(range.min)} - ${rp(range.max)}).`,
-                aksi: "Periksa satuan tagihan/pembelian atau beri catatan pemakaian khusus."
+                pesan: cekBlok.pesan,
+                aksi: cekBlok.aksi
             });
         }
     });
 
-    hrRows.forEach(row => {
-        calcHR(row).forEach(i => validationLogs.push({
-            kuesioner: `VPKRT27-${row.sumber} (H${row.hari})`,
-            rincian: row.nama || row.kode || "(Baris Harian)",
-            level: i.lv === 'danger' ? 'ERROR' : 'WARNING',
-            pesan: i.msg,
-            aksi: "Periksa kembali kuantitas, angka konversi, atau nilai transaksi harian."
-        }));
-    });
-
+    // Check LK (validasi blok makanan, outlier harga & batas per kapita)
     lkRows.forEach(row => {
-        if (!row.kode && (row.nama || (parseFloat(row.nilai) || 0) > 0 || (parseFloat(row.totalHarian) || 0) > 0)) {
-            validationLogs.push({
-                kuesioner: "VPKRT27-LK",
-                rincian: row.nama || "(Tanpa Nama)",
-                level: "WARNING",
-                pesan: "Komoditas makanan belum dipilih dari daftar master Buku 5.",
-                aksi: "Pilih komoditas dari dropdown autocomplete agar kode dan batas per kapita tervalidasi."
-            });
-        }
         calcLK(row).issues.forEach(i => validationLogs.push({
             kuesioner: "VPKRT27-LK",
-            rincian: row.nama || row.kode,
-            level: i.lv === 'danger' ? 'ERROR' : 'WARNING',
+            rincian: row.nama || "(Kosong)",
+            level: i.levelLog || "WARNING",
             pesan: i.msg,
             aksi: i.aksi
         }));
@@ -844,7 +575,8 @@ function updateValidationDashboard() {
         banner.innerHTML = `<h3><i class="fa-solid fa-circle-check"></i> DOKUMEN CLEAN / VALID (TIDAK ADA ANOMALI HITUNGAN)</h3>`;
         tbody.innerHTML = `<tr><td colspan="6" class="text-center">Tidak ada kesalahan atau peringatan isian. Dokumen siap di-entry ke FASIH.</td></tr>`;
     } else {
-        banner.className = "alert alert-warning";
+        const hasError = validationLogs.some(l => l.level === 'ERROR');
+        banner.className = hasError ? "alert alert-danger" : "alert alert-warning";
         banner.innerHTML = `<h3><i class="fa-solid fa-triangle-exclamation"></i> TERDAPAT ${validationLogs.length} TEMUAN / PERINGATAN ISIAN DOKUMEN</h3>`;
         tbody.innerHTML = validationLogs.map((log, idx) => `
             <tr>
@@ -860,7 +592,7 @@ function updateValidationDashboard() {
 }
 
 // -------------------------------------------------------------
-// TAB 7: MASTER BUKU 5 CATALOG FILTER (PAGINASI 100 BARIS)
+// TAB 7: MASTER BUKU 5 CATALOG FILTER
 // -------------------------------------------------------------
 function renderCatalog() {
     filterCatalog();
@@ -868,34 +600,21 @@ function renderCatalog() {
 
 function filterCatalog() {
     const q = (document.getElementById('catalogSearchInput').value || "").toLowerCase().trim();
-    const tokens = q.split(/\s+/).filter(Boolean);
     const tbody = document.getElementById('tbodyCatalog');
 
-    const matched = [];
-    for (let i = 0; i < MASTER_KOMODITAS.length; i++) {
-        const item = MASTER_KOMODITAS[i];
-        let ok = true;
-        for (let t = 0; t < tokens.length; t++) {
-            if (!item._search.includes(tokens[t])) {
-                ok = false;
-                break;
-            }
-        }
-        if (ok) matched.push(item);
-    }
+    const filtered = MASTER_KOMODITAS.filter(item => 
+        item.nama.toLowerCase().includes(q) ||
+        item.kode.includes(q) ||
+        item.kualitas.toLowerCase().includes(q)
+    );
 
-    const preview = matched.slice(0, 100);
-    const infoRow = matched.length > 100
-        ? `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Menampilkan <strong>100</strong> dari <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas yang cocok. Ketik kata kunci lebih spesifik (misal: <code>gas alam</code>, <code>beras pandan</code>, atau <code>0342001</code>) untuk menyaring hasil.</td></tr>`
-        : `<tr><td colspan="6" class="text-center" style="background:#f8fafc;color:#475569;">Total ditemukan: <strong>${matched.length.toLocaleString('id-ID')}</strong> komoditas/kualitas.</td></tr>`;
-
-    tbody.innerHTML = infoRow + preview.map(item => `
+    tbody.innerHTML = filtered.map(item => `
         <tr>
             <td><code>${item.kode}</code></td>
             <td><strong>${esc(item.nama)}</strong></td>
             <td>${esc(item.kualitas)}</td>
-            <td><span class="badge badge-bps">${esc(item.satuan)}</span></td>
-            <td>${item.batas_max_perkapita} ${esc(item.satuan)}</td>
+            <td><span class="badge badge-bps">${item.satuan}</span></td>
+            <td>${item.batas_max_perkapita} ${item.satuan}</td>
             <td><span class="badge badge-info">${item.kuesioner}</span></td>
         </tr>
     `).join('');
