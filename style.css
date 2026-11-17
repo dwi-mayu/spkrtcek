@@ -474,3 +474,15 @@ body {
     color: white;
     border-color: var(--bps-blue);
 }
+
+/* Perbaikan Scroll Dropdown Pencarian Komoditas */
+.autocomplete-dropdown-panel {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 9999;
+}
+.autocomplete-item.active-opt {
+    background-color: #dbeafe;
+}

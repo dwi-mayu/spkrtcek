@@ -1,19 +1,15 @@
-# SPKRT 2027 - Form Kuesioner Digital & Engine Validasi Otomatis (BPS)
+# Aplikasi Form Kuesioner Digital & Engine Validasi SPKRT 2027 (Final v2)
 
-Aplikasi Web-Entry Form Kuesioner Digital & Engine Validasi Otomatis untuk **Survei Pola Konsumsi Rumah Tangga 2027 (SPKRT 2027)** Badan Pusat Statistik.
+Paket aplikasi web statis siap pakai (zero-backend, offline-ready dengan `localStorage`) untuk pencacahan dan pemeriksaan **Survei Pola Konsumsi Rumah Tangga (SPKRT) 2027** Badan Pusat Statistik (BPS).
 
-## Fitur Lengkap Siap Pakai:
-1. **Pemilih Wilayah Pencacahan Multi-Daerah**: Otomatis menyesuaikan acuan range harga wajar lokal (termasuk wilayah jaringan **Gas Alam / Gas Bumi Rumah Tangga (Jargas PGN)** seperti Kota Tarakan, Samarinda, Bulungan, Jabodetabek, serta Standar Nasional).
-2. **Database Master Buku 5 Lengkap (40.998 Komoditas & Kualitas)**: Mendukung pencarian autocomplete multi-kata kunci termasuk alias *Gas Alam / Jargas / Gas Bumi*.
-3. **Seluruh Form Kuesioner Interaktif & Dapat Diisi Penuh**:
-   - **VPKRT27-P**: Pemutakhiran & validasi eligibilitas sampel + hitung otomatis alokasi set BLp/HRp.
-   - **VPKRT27-BL & BLp**: Pengeluaran konsumsi bukan makanan (Tunai, Kredit, Produksi Sendiri) + cek range harga wilayah.
-   - **VPKRT27-HR & HRp**: Form input harian aktif Hari ke-1 s.d. Hari ke-7 + tombol **Rekap Otomatis ke VPKRT27-LK**.
-   - **VPKRT27-LK & KK**: Rekapitulasi mingguan makanan, konversi satuan lokal ke standar, dan cek outlier Buku 4.
-   - **VPKRT27-S**: Pengeluaran pendidikan, estimasi sewa rumah, kesehatan tahunan, dan pajak/asuransi.
-4. **Auto-Save Lokal & Ekspor JSON**: Tersimpan otomatis di `localStorage` browser dan dapat diunduh sebagai file `.json`.
+## Pembaruan & Perbaikan Utama
+1. **Validasi Range Harga Lengkap (40.998 Komoditas / 131 Kelas COICOP):**
+   - Menambahkan acuan range harga seluruh **131 kelas komoditas** pada `master_range_harga.js` dengan penyesuaian otomatis indeks harga wilayah (Tarakan +8%, Bulungan +10%, Samarinda +4%, Jakarta, dan Nasional).
+   - Validasi berjalan menyeluruh pada **VPKRT27-BL**, **VPKRT27-HR/HRp**, dan **VPKRT27-LK**, serta menampilkan rentang harga wajar langsung pada kolom status.
+2. **Perbaikan Scroll & Navigasi Dropdown Pencarian:**
+   - Memperbaiki listener *scroll* global agar menggulir daftar pilihan `#autocompleteDropdown` tidak lagi menutup panel dropdown.
+   - Mendukung navigasi keyboard (`Panah Atas/Bawah`, `Enter`, `Esc`) dan menampilkan hingga 50 hasil kecocokan sekaligus.
 
-## Cara Deploy ke GitHub Pages / Vercel / Netlify:
-1. Ekstrak seluruh isi file ZIP ini ke dalam satu folder.
-2. Pastikan keenam file (`index.html`, `style.css`, `app.js`, `master_komoditas.js`, `master_range_harga.js`, `README.md`) berada di root folder.
-3. Unggah ke repository GitHub lalu aktifkan **Settings -> Pages -> Branch `main`**, atau seret (drag & drop) folder tersebut ke dashboard **Vercel** / **Netlify**.
+## Cara Deploy
+- **GitHub Pages / Vercel / Netlify:** Unggah seluruh isi folder ini ke repositori atau langsung *drag-and-drop* folder ke Vercel/Netlify.
+- **Lokal / Offline Laptop Petugas:** Ekstrak ZIP lalu buka `index.html` menggunakan Google Chrome atau Microsoft Edge.
