@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="theme-color" content="#005691">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23005691%27/%3E%3Cpath d=%27M9 17l5 5 9-11%27 stroke=%27%23fff%27 stroke-width=%273%27 fill=%27none%27/%3E%3C/svg%3E">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Form Kuesioner Digital & Validasi Otomatis SPKRT 2027</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <div class="logo-area">
+                <i class="fa-solid fa-clipboard-check logo-icon"></i>
+                <div>
+                    <h1>SPKRT 2027 - Form Kuesioner Digital & Engine Validasi</h1>
+                    <p class="subtitle">Badan Pusat Statistik | Survei Pola Konsumsi Rumah Tangga 2027</p>
+                </div>
+            </div>
+            <div class="header-badges">
+                <span class="badge badge-bps"><i class="fa-solid fa-shield-halved"></i> Standar Buku 1-5</span>
+                <button class="btn btn-ghost" onclick="loadDemo()"><i class="fa-solid fa-wand-magic-sparkles"></i> Isi Contoh</button>
+                <button class="btn btn-ghost" onclick="resetAll()"><i class="fa-solid fa-eraser"></i> Hapus Semua Isian</button>
+            </div>
+        </div>
+    </header>
+
+    <nav class="app-nav">
+        <div class="nav-container">
+            <button class="nav-tab active" onclick="switchTab('vpkrt-p')"><i class="fa-solid fa-house-user"></i> VPKRT27-P (Eligibilitas)</button>
+            <button class="nav-tab" onclick="switchTab('vpkrt-bl')"><i class="fa-solid fa-cart-shopping"></i> VPKRT27-BL (Bukan Makanan)</button>
+            <button class="nav-tab" onclick="switchTab('vpkrt-hr')"><i class="fa-solid fa-calendar-day"></i> VPKRT27-HR (Harian 7 Hari)</button>
+            <button class="nav-tab" onclick="switchTab('vpkrt-lk')"><i class="fa-solid fa-utensils"></i> VPKRT27-LK & KK (Rekap Makanan)</button>
+            <button class="nav-tab" onclick="switchTab('vpkrt-s')"><i class="fa-solid fa-file-invoice-dollar"></i> VPKRT27-S (Tahunan)</button>
+
+            <button class="nav-tab nav-tab-alert" onclick="switchTab('log-validasi')"><i class="fa-solid fa-triangle-exclamation"></i> Log Validasi <span class="badge-count" id="logErrorCount">0</span></button>
+            <button class="nav-tab" onclick="switchTab('master-buku5')"><i class="fa-solid fa-book-open"></i> Master Buku 5 (Katalog)</button>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <!-- TAB 1: VPKRT27-P -->
+        <section id="tab-vpkrt-p" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-house-chimney"></i> Form VPKRT27-P: Pemutakhiran & Eligibilitas Sampel Rumah Tangga</h2>
+                    <span class="tag tag-ppl">Petugas: PPL / PML</span>
+                </div>
+                <div class="card-body">
+                    <form id="formP">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-hashtag"></i> NKS / No. Urut Sampel RT</label>
+                                <input type="text" id="p_nks" placeholder="Misal: 0012B">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-user"></i> Nama Kepala Rumah Tangga (KRT)</label>
+                                <input type="text" id="p_krt" placeholder="Nama KRT">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-users"></i> Jumlah ART Total (Rincian 1)</label>
+                                <input type="number" id="p_art_total" min="1" max="20" onchange="runValidationP()">
+                                <small class="help-text">Kriteria Syarat: 2 s.d. 10 orang</small>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-briefcase"></i> Jumlah ART Bekerja/Berusaha (Rincian 4)</label>
+                                <input type="number" id="p_art_bekerja" min="0" max="20" onchange="runValidationP()">
+                                <small class="help-text">Kriteria Syarat: Minimal 1 ART bekerja</small>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-user-graduate"></i> Jumlah ARTE Berusia &ge; 13 Tahun</label>
+                                <input type="number" id="p_arte_13" min="0" max="20" onchange="runValidationP()">
+                                <small class="help-text">Dasar pembagian kuesioner VPKRT27-BLp & HRp</small>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-plane-departure"></i> Rencana Pindah Keluar SLS (&le; 4 Bulan)</label>
+                                <select id="p_rencana_pindah" onchange="runValidationP()">
+                                    <option value="TIDAK" selected>Tidak Berencana Pindah (Eligible)</option>
+                                    <option value="YA">Ya, Akan Pindah (Tidak Eligible)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="result-box mt-3" id="resultEligibilityP">
+                            <!-- Results auto populated -->
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: VPKRT27-BL -->
+        <section id="tab-vpkrt-bl" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-bag-shopping"></i> Form VPKRT27-BL / BLp: Pengeluaran Konsumsi Bukan Makanan</h2>
+                    <span class="tag tag-ppl">Pencatatan Bulanan (Bulan 1, 2, 3)</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fa-solid fa-lightbulb"></i> <strong>Pencarian Komoditas Otomatis:</strong> Ketik kode atau nama barang (seperti <em>Listrik, Sabun, Seragam, Servis AC, Tokopedia</em>) pada kolom pencarian untuk memanggil data Master Buku 5 dan pengelompokan jenis pasar otomatis.
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table-entry" id="tableBL">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">No</th>
+                                    <th>Cari / Ketik Komoditas (Buku 5)</th>
+                                    <th style="width: 120px;">Kode</th>
+                                    <th>Metode Perolehan</th>
+                                    <th>Jenis Pasar (1-5)</th>
+                                    <th>Harga Cash (Rp)</th>
+                                    <th>DP / Cicilan (Rp)</th>
+                                    <th>Status Outlier / Validasi</th>
+                                    <th style="width: 50px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyBL">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-secondary mt-2" onclick="addRowBL()"><i class="fa-solid fa-plus"></i> Tambah Baris Komoditas BL</button>
+
+                    <div class="summary-card mt-3">
+                        <div class="summary-item">
+                            <span>Total Pengeluaran Konsumsi Bukan Makanan (Kolom 5):</span>
+                            <strong id="totalKonsumsiBL">Rp 0</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span>Total Transaksi Kredit / Tabungan (Bukan Konsumsi):</span>
+                            <strong id="totalNonKonsumsiBL">Rp 0</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: VPKRT27-HR -->
+        <section id="tab-vpkrt-hr" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-calendar-days"></i> Form VPKRT27-HR & HRp: Catatan Konsumsi Harian (7 Hari)</h2>
+                    <span class="tag tag-ppl">Minggu Khusus Bulan ke-3</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning"><i class="fa-solid fa-circle-info"></i> Tabel di bawah hanya <strong>contoh ilustrasi format</strong>, belum berupa form isian.</div>
+                    <p class="description">Gunakan lembar kerja ini untuk memverifikasi pencatatan harian bahan makanan, makanan jadi, dan rokok dari kuesioner utama (HR) dan kuesioner mandiri ARTE (HRp) selama 7 hari berturut-turut.</p>
+                    
+                    <div class="table-responsive mt-2">
+                        <table class="table-entry" id="tableHR">
+                            <thead>
+                                <tr>
+                                    <th>Hari / Tanggal</th>
+                                    <th>Sumber Catatan</th>
+                                    <th>Uraian Komoditas & Kualitas</th>
+                                    <th>Banyaknya</th>
+                                    <th>Nilai Transaksi (Rp)</th>
+                                    <th>Jenis Pasar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Hari 1 (Senin)</td>
+                                    <td><span class="badge badge-info">HR Utama</span></td>
+                                    <td>Beras Medium (IR-64)</td>
+                                    <td>2 Kg</td>
+                                    <td>Rp 28.000</td>
+                                    <td>Pasar Tradisional</td>
+                                </tr>
+                                <tr>
+                                    <td>Hari 1 (Senin)</td>
+                                    <td><span class="badge badge-warning">HRp (ARTE)</span></td>
+                                    <td>Keripik Seblak Pedas & AMDK Botol</td>
+                                    <td>1 Bks & 1 Btl</td>
+                                    <td>Rp 9.000</td>
+                                    <td>Kantin Sekolah</td>
+                                </tr>
+                                <tr>
+                                    <td>Hari 2 (Selasa)</td>
+                                    <td><span class="badge badge-info">HR Utama</span></td>
+                                    <td>Daging Ayam Ras Karkas</td>
+                                    <td>1 Kg</td>
+                                    <td>Rp 38.000</td>
+                                    <td>Supermarket</td>
+                                </tr>
+                                <tr>
+                                    <td>Hari 3 s.d. 7</td>
+                                    <td><span class="badge badge-info">HR & HRp</span></td>
+                                    <td>Tercatat bertahap pada Lembar Kerja LK...</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: VPKRT27-LK & KK -->
+        <section id="tab-vpkrt-lk" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-utensils"></i> Form VPKRT27-LK & VPKRT27-KK: Rekapitulasi Makanan & Konversi Satuan</h2>
+                    <span class="tag tag-pml">Rekap PPL & Pemeriksaan PML</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fa-solid fa-keyboard"></i> <strong>Fitur Pencarian Komoditas Ketik (Typeable):</strong> Ketik nama komoditas makanan pada kolom di bawah. Sistem akan otomatis mengisi kode 10-digit, satuan standar, serta mengecek konversi dan outlier harga wajar.
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table-entry" id="tableLK">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">No</th>
+                                    <th style="min-width: 220px;">Cari / Ketik Komoditas (Buku 5)</th>
+                                    <th style="width: 110px;">Kode</th>
+                                    <th style="width: 80px;">Tot H1-H7 (Col 13)</th>
+                                    <th style="width: 100px;">Satuan Lokal</th>
+                                    <th style="width: 90px;">Konversi (Col 15)</th>
+                                    <th style="width: 110px;">Sat Standar (Col 16)</th>
+                                    <th style="width: 120px;">Nilai Rp (Col 24)</th>
+                                    <th style="width: 110px;">Harga / Satuan</th>
+                                    <th>Cek Outlier / Perkapita (Buku 4)</th>
+                                    <th style="width: 50px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyLK">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-secondary mt-2" onclick="addRowLK()"><i class="fa-solid fa-plus"></i> Tambah Baris Makanan LK</button>
+
+                    <div class="summary-card mt-3">
+                        <div class="summary-item">
+                            <span>Total Rekapitulasi Pengeluaran Makanan Seminggu (Kolom 24):</span>
+                            <strong id="totalNilaiLK">Rp 0</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span>Rata-rata Pengeluaran Makanan Per Kapita / Minggu:</span>
+                            <strong id="perKapitaLK">Rp 0</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: VPKRT27-S -->
+        <section id="tab-vpkrt-s" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-file-invoice-dollar"></i> Form VPKRT27-S: Rekapitulasi Sosial Ekonomi & Tahunan</h2>
+                    <span class="tag tag-pml">Pencacahan Bulan ke-3</span>
+                </div>
+                <div class="card-body">
+                    <form id="formS">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Pengeluaran Pendidikan 3 Bulan Terakhir (Rp)</label>
+                                <input type="number" id="s_pendidikan" onchange="runValidationS()">
+                            </div>
+                            <div class="form-group">
+                                <label>Jumlah ART Bersekolah (SD - PT)</label>
+                                <input type="number" id="s_art_sekolah" onchange="runValidationS()">
+                            </div>
+                            <div class="form-group">
+                                <label>Status Kepemilikan Bangunan Tempat Tinggal</label>
+                                <select id="s_status_rumah" onchange="runValidationS()">
+                                    <option value="MILIK_SENDIRI" selected>Milik Sendiri</option>
+                                    <option value="KONTRAK_SEWA">Kontrak / Sewa</option>
+                                    <option value="BEBAS_SEWA">Bebas Sewa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Estimasi Sewa Rumah per Bulan (Rp)</label>
+                                <input type="number" id="s_nilai_sewa" onchange="runValidationS()">
+                            </div>
+                        </div>
+
+                        <div class="result-box mt-3" id="resultValidationS">
+                            <!-- S Validation Results -->
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 6: LOG VALIDASI -->
+        <section id="tab-log-validasi" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-triangle-exclamation"></i> Dashboard Log Validasi & Peringatan Isian Dokumen</h2>
+                    <span class="tag tag-pml">Pemeriksaan PML (Buku 4)</span>
+                </div>
+                <div class="card-body">
+                    <div class="validation-summary-box mb-3" id="validationSummaryBanner">
+                        <!-- Dynamic Banner -->
+                    </div>
+
+                    <h3><i class="fa-solid fa-list-check"></i> Daftar Temuan Isian yang Perlu Diklarifikasi:</h3>
+                    <div class="table-responsive mt-2">
+                        <table class="table-entry" id="tableLog">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px;">No</th>
+                                    <th style="width: 120px;">Kuesioner</th>
+                                    <th style="width: 180px;">Rincian / Komoditas</th>
+                                    <th style="width: 120px;">Tingkat Error</th>
+                                    <th>Pesan Temuan & Aturan Buku 4</th>
+                                    <th>Rekomendasi Tindakan Petugas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyLog">
+                                <!-- Log rows dynamically generated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 7: MASTER BUKU 5 -->
+        <section id="tab-master-buku5" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-book"></i> Katalog Master Komoditas & Kualitas SPKRT 2027 (Buku 5)</h2>
+                    <span class="tag tag-ppl">Pencarian & Referensi Kode</span>
+                </div>
+                <div class="card-body">
+                    <div class="search-bar-container">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="catalogSearchInput" class="search-input" placeholder="Ketik nama komoditas, kode 10-digit, atau varian kualitas (misal: Beras, Ayam, Listrik, Tokopedia)..." oninput="filterCatalog()">
+                    </div>
+
+                    <div class="table-responsive mt-3">
+                        <table class="table-entry">
+                            <thead>
+                                <tr>
+                                    <th>Kode Komoditas</th>
+                                    <th>Nama Komoditas</th>
+                                    <th>Spesifikasi Kualitas / Varian</th>
+                                    <th>Satuan Standar</th>
+                                    <th>Batas Max Per Kapita</th>
+                                    <th>Kuesioner Target</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyCatalog">
+                                <!-- Catalog dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>Isian tersimpan otomatis hanya di browser perangkat ini (tidak dikirim ke server).</p>
+        <p>Aplikasi Form Kuesioner Digital & Engine Validasi SPKRT 2027 &copy; Badan Pusat Statistik (BPS)</p>
+    </footer>
+
+    <!-- Floating Autocomplete Container Template -->
+    <div id="autocompleteDropdown" class="autocomplete-dropdown-panel" style="display: none;"></div>
+
+    <script src="master_komoditas.js"></script>
+    <script src="master_range_harga.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
